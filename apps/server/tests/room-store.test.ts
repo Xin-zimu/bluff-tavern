@@ -34,4 +34,18 @@ describe('RoomStore', () => {
     expect(() => store.kick(host.room.code, guest.playerId, host.playerId)).toThrow('你不是房主');
     expect(store.kick(host.room.code, host.playerId, guest.playerId).room.players).toHaveLength(1);
   });
+
+  it('keeps a playing player seat and restores it with its session token', () => {
+    const store = new RoomStore(() => 3);
+    const host = store.create('狼', 'socket-a');
+    const guest = store.join(host.room.code, '狐狸', 'socket-b');
+    store.setReady(host.room.code, host.playerId, true);
+    store.setReady(host.room.code, guest.playerId, true);
+    store.startGame(host.room.code, host.playerId);
+    const disconnected = store.disconnect('socket-b');
+    expect(disconnected?.room?.players.find((player) => player.id === guest.playerId)?.isConnected).toBe(false);
+    const resumed = store.resume(guest.sessionToken, 'socket-c');
+    expect(resumed.playerId).toBe(guest.playerId);
+    expect(resumed.room.players.find((player) => player.id === guest.playerId)?.isConnected).toBe(true);
+  });
 });

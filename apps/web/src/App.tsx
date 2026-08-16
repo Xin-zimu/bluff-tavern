@@ -11,7 +11,14 @@ export function App() {
   const { setConnection, updateRoom, leaveRoom: clearRoom, setNotice, setGame } = state;
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    const connected = () => setConnection('connected');
+    const connected = () => {
+      setConnection('connected');
+      const sessionToken = localStorage.getItem('bluff-tavern.session-token');
+      if (sessionToken && !useSessionStore.getState().room) socket.emit('session:resume', { sessionToken }, (result) => {
+        if (result.ok) useSessionStore.getState().enterRoom(result.data.room, result.data.playerId, result.data.sessionToken);
+        else localStorage.removeItem('bluff-tavern.session-token');
+      });
+    };
     const disconnected = () => setConnection('disconnected');
     const closeRoom = () => clearRoom();
     const kicked = (message: string) => { clearRoom(); setNotice(message); };
@@ -24,7 +31,7 @@ export function App() {
     setBusy(true);
     socket.emit('room:create', { nickname }, (result) => {
       setBusy(false);
-      if (result.ok) state.enterRoom(result.data.room, result.data.playerId);
+      if (result.ok) { localStorage.setItem('bluff-tavern.session-token', result.data.sessionToken); state.enterRoom(result.data.room, result.data.playerId, result.data.sessionToken); }
       else state.setNotice(result.error.message);
     });
   };
@@ -32,13 +39,13 @@ export function App() {
     setBusy(true);
     socket.emit('room:join', { nickname, roomCode }, (result) => {
       setBusy(false);
-      if (result.ok) state.enterRoom(result.data.room, result.data.playerId);
+      if (result.ok) { localStorage.setItem('bluff-tavern.session-token', result.data.sessionToken); state.enterRoom(result.data.room, result.data.playerId, result.data.sessionToken); }
       else state.setNotice(result.error.message);
     });
   };
   const leaveRoom = () => {
     if (!state.room) return;
-    socket.emit('room:leave', { roomCode: state.room.code }, () => state.leaveRoom());
+    socket.emit('room:leave', { roomCode: state.room.code }, () => { localStorage.removeItem('bluff-tavern.session-token'); state.leaveRoom(); });
   };
   const sendReady = (ready: boolean) => {
     if (!state.room) return;
@@ -89,6 +96,6 @@ export function App() {
     {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onMaxPlayersChange={updateMaxPlayers} onKick={kickPlayer} onStart={startGame} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V0.3 · 原创占位视觉 · 不含原游戏版权资产</footer>
+    <footer>V1.0 · 原创占位视觉 · 不含原游戏版权资产</footer>
   </div>;
 }

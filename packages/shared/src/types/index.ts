@@ -11,6 +11,7 @@ export interface PlayerView {
   nickname: string;
   status: PlayerStatus;
   joinedAt: number;
+  isConnected: boolean;
 }
 
 export interface RoomView {
@@ -27,6 +28,7 @@ export interface RoomView {
 export interface RoomMembership {
   room: RoomView;
   playerId: string;
+  sessionToken: string;
 }
 
 export interface RoomPlayerEvent {

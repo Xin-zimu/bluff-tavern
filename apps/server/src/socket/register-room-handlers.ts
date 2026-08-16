@@ -1,5 +1,5 @@
 import type { Server, Socket } from 'socket.io';
-import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, challengeSchema, restartGameSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
+import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, challengeSchema, restartGameSchema, resumeSessionSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
 import { GameService } from '../game/game-service.js';
 import { RoomError, RoomStore } from '../rooms/room-store.js';
 
@@ -184,7 +184,21 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     } catch (error) { ack(failure(error)); }
   });
 
-  socket.on('disconnect', () => leaveCurrent(io, socket, rooms, logger));
+  socket.on('session:resume', (payload, ack) => {
+    const parsed = resumeSessionSchema.safeParse(payload);
+    if (!parsed.success) return ack(invalid);
+    try {
+      const result = rooms.resume(parsed.data.sessionToken, socket.id);
+      socket.data = { playerId: result.playerId, roomCode: result.room.code };
+      void socket.join(result.room.code);
+      io.to(result.room.code).emit('room:state', result.room);
+      try { broadcastGameState(io, rooms, games, result.room.code); } catch { /* Lobby has no game state. */ }
+      logger.info({ event: 'player_reconnected', roomCode: result.room.code, playerId: result.playerId });
+      ack({ ok: true, data: result });
+    } catch (error) { ack(failure(error)); }
+  });
+
+  socket.on('disconnect', () => disconnectCurrent(io, socket, rooms, logger));
 }
 
 function leaveCurrent(io: GameServer, socket: GameSocket, rooms: RoomStore, logger: AppLogger): void {
@@ -202,6 +216,14 @@ function leaveCurrent(io: GameServer, socket: GameSocket, rooms: RoomStore, logg
 
 function isCurrentMember(socket: GameSocket, roomCode: string): boolean {
   return socket.data.roomCode === roomCode && socket.data.playerId !== undefined;
+}
+
+function disconnectCurrent(io: GameServer, socket: GameSocket, rooms: RoomStore, logger: AppLogger): void {
+  const result = rooms.disconnect(socket.id);
+  if (!result) return;
+  socket.data = {};
+  logger.info({ event: 'player_disconnected', roomCode: result.code, playerId: result.player.id });
+  if (result.room) io.to(result.code).emit('room:state', result.room);
 }
 
 function broadcastGameState(io: GameServer, rooms: RoomStore, games: GameService, roomCode: string): void {

@@ -1,0 +1,16 @@
+[Unit]
+Description=Bluff Tavern Socket.IO server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/bluff-tavern
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3001
+Environment=CLIENT_ORIGIN=https://your-domain.example
+ExecStart=/usr/bin/node apps/server/dist/main.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

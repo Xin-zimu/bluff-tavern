@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
-import { MAX_PLAYERS, MIN_PLAYERS, type PlayerView, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { MAX_PLAYERS, MIN_PLAYERS, type PlayerView, type RoomMembership, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
 import { createRoomCode, type RandomIndex } from './room-code.js';
 
-interface InternalPlayer extends PlayerView { socketId: string }
+interface InternalPlayer extends PlayerView { socketId: string; sessionToken: string }
 interface InternalRoom extends Omit<RoomView, 'players'> { players: InternalPlayer[] }
 export interface Departure { code: string; player: PlayerView; room: RoomView | null }
 export interface KickResult { room: RoomView; kickedPlayer: PlayerView; kickedSocketId: string }
@@ -15,7 +15,7 @@ export class RoomStore {
   private readonly rooms = new Map<string, InternalRoom>();
   constructor(private readonly randomIndex?: RandomIndex) {}
 
-  create(nickname: string, socketId: string): { room: RoomView; playerId: string } {
+  create(nickname: string, socketId: string): RoomMembership {
     const code = this.generateUniqueCode();
     const player = this.makePlayer(nickname, socketId);
     const now = Date.now();
@@ -23,10 +23,10 @@ export class RoomStore {
       id: randomUUID(), code, hostPlayerId: player.id, status: 'LOBBY', maxPlayers: MAX_PLAYERS,
       settings: { maxPlayers: MAX_PLAYERS }, players: [player], createdAt: now,
     });
-    return { room: this.getView(code), playerId: player.id };
+    return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken };
   }
 
-  join(code: string, nickname: string, socketId: string): { room: RoomView; playerId: string } {
+  join(code: string, nickname: string, socketId: string): RoomMembership {
     const room = this.requireRoom(code);
     if (room.status !== 'LOBBY') throw new RoomError('ROOM_NOT_JOINABLE', '牌局已经开始');
     if (room.players.length >= room.maxPlayers) throw new RoomError('ROOM_FULL', '房间已满');
@@ -35,7 +35,7 @@ export class RoomStore {
     }
     const player = this.makePlayer(nickname, socketId);
     room.players.push(player);
-    return { room: this.getView(code), playerId: player.id };
+    return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken };
   }
 
   setReady(code: string, playerId: string, ready: boolean): RoomView {
@@ -102,6 +102,30 @@ export class RoomStore {
     return this.getView(code);
   }
 
+  disconnect(socketId: string): Departure | null {
+    for (const [code, room] of this.rooms) {
+      const player = room.players.find((candidate) => candidate.socketId === socketId);
+      if (!player) continue;
+      // A completed game must remain resumable too: its host may need to restart it.
+      // Lobby departures still free their seats immediately.
+      if (room.status === 'LOBBY') return this.leaveBySocket(socketId);
+      player.isConnected = false;
+      return { code, player: this.toPlayerView(player), room: this.getView(code) };
+    }
+    return null;
+  }
+
+  resume(sessionToken: string, socketId: string): RoomMembership {
+    for (const [code, room] of this.rooms) {
+      const player = room.players.find((candidate) => candidate.sessionToken === sessionToken);
+      if (!player) continue;
+      player.socketId = socketId;
+      player.isConnected = true;
+      return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken };
+    }
+    throw new RoomError('SESSION_NOT_FOUND', '无法恢复会话');
+  }
+
   leaveBySocket(socketId: string): Departure | null {
     for (const [code, room] of this.rooms) {
       const index = room.players.findIndex((player) => player.socketId === socketId);
@@ -153,11 +177,11 @@ export class RoomStore {
   }
 
   private toPlayerView(player: InternalPlayer): PlayerView {
-    return { id: player.id, nickname: player.nickname, status: player.status, joinedAt: player.joinedAt };
+    return { id: player.id, nickname: player.nickname, status: player.status, joinedAt: player.joinedAt, isConnected: player.isConnected };
   }
 
   private makePlayer(nickname: string, socketId: string): InternalPlayer {
-    return { id: randomUUID(), nickname, socketId, status: 'CONNECTED', joinedAt: Date.now() };
+    return { id: randomUUID(), nickname, socketId, sessionToken: randomBytes(32).toString('base64url'), status: 'CONNECTED', joinedAt: Date.now(), isConnected: true };
   }
 
   private generateUniqueCode(): string {

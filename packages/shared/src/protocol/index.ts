@@ -23,6 +23,7 @@ export const playCardsSchema = z.object({
 }).refine((value) => new Set(value.cardIndexes).size === value.cardIndexes.length, { message: 'Card indexes must be unique' });
 export const challengeSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
 export const restartGameSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
+export const resumeSessionSchema = z.object({ sessionToken: z.string().min(32).max(256) });
 
 export interface ClientToServerEvents {
   'room:create': (payload: z.input<typeof createRoomSchema>, ack: (result: Ack<RoomMembership>) => void) => void;
@@ -35,6 +36,7 @@ export interface ClientToServerEvents {
   'game:playCards': (payload: z.input<typeof playCardsSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:challenge': (payload: z.input<typeof challengeSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:restart': (payload: z.input<typeof restartGameSchema>, ack: (result: Ack<GameView>) => void) => void;
+  'session:resume': (payload: z.input<typeof resumeSessionSchema>, ack: (result: Ack<RoomMembership>) => void) => void;
 }
 
 export interface ServerToClientEvents {

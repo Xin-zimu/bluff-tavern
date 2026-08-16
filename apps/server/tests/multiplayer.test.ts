@@ -16,7 +16,7 @@ function connect(url: string) {
   });
 }
 
-function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'game:start' | 'game:playCards', payload: object) {
+function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'game:start' | 'game:playCards' | 'session:resume', payload: object) {
   return new Promise<Ack<T>>((resolve) => client.emit(event, payload as never, resolve as never));
 }
 
@@ -74,10 +74,43 @@ describe('real Socket.IO multiplayer', () => {
       });
       expect(played).toMatchObject({ ok: true, data: { discardCount: 1 } });
       const afterLeave = new Promise<number>((resolve) => a.on('room:state', (room: RoomView) => {
-        if (room.players.length === 3) resolve(3);
+        if (room.players.length === 4 && room.players.some((player) => !player.isConnected)) resolve(4);
       }));
       peers[0]!.peer.disconnect();
-      expect(await afterLeave).toBe(3);
+      expect(await afterLeave).toBe(4);
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('restores a disconnected game player through a real Socket.IO session', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'Host' });
+      if (!created.ok) throw new Error(created.error.message);
+      const guest = await connect(url);
+      const joined = await emitAck<RoomMembership>(guest, 'room:join', { nickname: 'Guest', roomCode: created.data.room.code });
+      if (!joined.ok) throw new Error(joined.error.message);
+      await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
+        roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
+      })));
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(started.ok).toBe(true);
+      guest.disconnect();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const restored = await connect(url);
+      const resumed = await emitAck<RoomMembership>(restored, 'session:resume', { sessionToken: joined.data.sessionToken });
+      expect(resumed).toMatchObject({ ok: true, data: { playerId: joined.data.playerId } });
+      if (!resumed.ok) throw new Error('Resume failed');
+      expect(resumed.data.room.players).toHaveLength(2);
+      expect(resumed.data.room.players.find((player) => player.id === joined.data.playerId)?.isConnected).toBe(true);
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;

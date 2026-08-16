@@ -1,4 +1,4 @@
-# V0.2 架构
+# V1.0 架构
 
 ## 技术选择
 
@@ -33,7 +33,7 @@ React screen
 
 - 房主/准备：已在 V0.2 实现；`RoomStore` 校验 `hostPlayerId` 与大厅状态，配置变更会统一重置准备状态。
 - 牌局：独立 `GameStateMachine`，房间只持有状态机引用，所有判定留在服务端。
-- 断线重连：引入密码学随机 `sessionToken`、连接与玩家身份分离、宽限计时器；当前明确采用立即离开语义。
+- 断线重连：`sessionToken` 由 `randomBytes(32)` 生成，连接标识与玩家身份分离。大厅断线立即释放座位；`PLAYING` 与 `GAME_OVER` 状态保留座位并标记 `isConnected: false`，新的 socket 用 token 恢复原玩家。token 不会进入 `RoomView`、日志或仓库。宽限计时器、后台恢复和网络体验将在 V1.5 完成。
 - 多实例：把房间仓储迁移到 Redis，并启用 Socket.IO adapter。
 - 幂等性：关键牌局命令加入 `requestId` 去重缓存；V0.1 房间创建/加入尚不持久化请求。
 
@@ -43,4 +43,4 @@ React screen
 
 ## 安全与运维边界
 
-输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。生产 HTTPS、限流、Redis、Nginx 和 systemd 属后续版本，本阶段不伪装实现。
+输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。V1.0 提供 Nginx 反代与 systemd 服务模板，Node 默认绑定回环地址并由 Nginx 暴露同源网页与 `/socket.io/`。HTTPS、限流、Redis、多实例与持久化仍属后续版本；部署前必须自行配置证书及域名。

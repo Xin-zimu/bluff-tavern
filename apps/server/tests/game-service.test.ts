@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CardRank, GameView, RoomView } from '@bluff-tavern/shared';
 import { GameService } from '../src/game/game-service.js';
 
-const room: RoomView = { id: 'room', code: 'ABC234', hostPlayerId: 'p1', status: 'PLAYING', maxPlayers: 4, settings: { maxPlayers: 4 }, createdAt: 1, players: ['p1', 'p2', 'p3', 'p4'].map((id, index) => ({ id, nickname: id, status: 'PLAYING', joinedAt: index })) };
+const room: RoomView = { id: 'room', code: 'ABC234', hostPlayerId: 'p1', status: 'PLAYING', maxPlayers: 4, settings: { maxPlayers: 4 }, createdAt: 1, players: ['p1', 'p2', 'p3', 'p4'].map((id, index) => ({ id, nickname: id, status: 'PLAYING', joinedAt: index, isConnected: true })) };
 const game = () => new GameService({ nextInt: () => 0 });
 
 function playCard(service: GameService, predicate: (card: CardRank, state: GameView) => boolean) {

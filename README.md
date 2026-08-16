@@ -1,6 +1,6 @@
 # 诡牌酒馆 / Bluff Tavern
 
-手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V0.5 完整 MVP**：支持服务器权威牌局、质疑、轮盘惩罚、淘汰、胜负与再来一局；断线重连尚未进入。
+手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V1.0 可玩 MVP**：支持 2–4 人服务器权威牌局、质疑、轮盘惩罚、淘汰、胜负、再来一局和基础断线恢复。
 
 ## 技术栈
 
@@ -30,7 +30,7 @@ pnpm test
 pnpm build
 ```
 
-真实多人联机测试在 `apps/server/tests/multiplayer.test.ts`，会启动临时服务并连接四个真实 Socket.IO 客户端，覆盖房主权限、准备、配置与踢人。
+真实多人联机测试在 `apps/server/tests/multiplayer.test.ts`，会启动临时服务并连接四个真实 Socket.IO 客户端及真实断线恢复客户端。运行中的开发服务还可执行 `pnpm --filter @bluff-tavern/server exec tsx scripts/live-reconnect-v1.0.ts`，通过 Vite 的 Socket.IO 反代验证游戏内断线后恢复同一座位。
 
 ## 目录
 
@@ -47,8 +47,12 @@ docs/                     架构、协议与验收记录
 ## 当前边界
 
 - 状态仅在内存中；服务重启会清空房间。
-- 当前断线会立即离开房间，不是断线重连。session token 与宽限期将在后续阶段实现。
+- 牌局或结算阶段的意外断线会保留座位；浏览器用本地 `sessionToken` 在重新打开后恢复同一玩家身份。Token 只存浏览器本机、不写日志、不会出现在公开房间状态中。断线宽限、后台恢复、网络提示和 PWA 属 V1.5。
 - 房主离开后会转移给最早入席的剩余玩家；修改最大人数会取消所有人的准备状态。
-- 尚无牌局、观战、聊天、数据库或公网部署配置。
+- 内存状态在服务器重启后仍会清空；观战、聊天、数据库和多实例扩展尚未实现。
 
-详见 [`docs/architecture.md`](docs/architecture.md)、[`docs/protocol.md`](docs/protocol.md) 与 [`docs/V0.2-acceptance.md`](docs/V0.2-acceptance.md)。
+## 部署
+
+V1.0 提供最小 Nginx 与 systemd 模板：[`deploy/nginx/bluff-tavern.conf`](deploy/nginx/bluff-tavern.conf)、[`deploy/systemd/bluff-tavern.service`](deploy/systemd/bluff-tavern.service) 和 [`scripts/build-release.sh`](scripts/build-release.sh)。部署前必须替换示例域名并配置 HTTPS；具体步骤见 [`docs/deployment.md`](docs/deployment.md)。
+
+详见 [`docs/architecture.md`](docs/architecture.md)、[`docs/protocol.md`](docs/protocol.md) 与 [`docs/V1.0-acceptance.md`](docs/V1.0-acceptance.md)。

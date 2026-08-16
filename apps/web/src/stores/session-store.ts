@@ -5,10 +5,11 @@ interface SessionState {
   connection: ConnectionStatus;
   room: RoomView | null;
   playerId: string | null;
+  sessionToken: string | null;
   notice: string | null;
   game: GameView | null;
   setConnection: (connection: ConnectionStatus) => void;
-  enterRoom: (room: RoomView, playerId: string) => void;
+  enterRoom: (room: RoomView, playerId: string, sessionToken: string) => void;
   updateRoom: (room: RoomView) => void;
   leaveRoom: () => void;
   setNotice: (notice: string | null) => void;
@@ -17,11 +18,11 @@ interface SessionState {
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
-  connection: 'connecting', room: null, playerId: null, notice: null, game: null,
+  connection: 'connecting', room: null, playerId: null, sessionToken: null, notice: null, game: null,
   setConnection: (connection) => set({ connection }),
-  enterRoom: (room, playerId) => set({ room, playerId, notice: null }),
+  enterRoom: (room, playerId, sessionToken) => set({ room, playerId, sessionToken, notice: null }),
   updateRoom: (room) => set({ room }),
-  leaveRoom: () => set({ room: null, playerId: null, game: null }),
+  leaveRoom: () => set({ room: null, playerId: null, sessionToken: null, game: null }),
   setNotice: (notice) => set({ notice }),
   setGame: (game) => set({ game }),
   clearGame: () => set({ game: null }),
