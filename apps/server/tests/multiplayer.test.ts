@@ -21,6 +21,36 @@ function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEve
 }
 
 describe('real Socket.IO multiplayer', () => {
+  it('synchronizes eight clients and restores a disconnected eighth seat', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'Host8' });
+      if (!created.ok) throw new Error(created.error.message);
+      const joined = await Promise.all(Array.from({ length: 7 }, async (_, index) => {
+        const peer = await connect(url);
+        const result = await emitAck<RoomMembership>(peer, 'room:join', { nickname: `E${index + 2}`, roomCode: created.data.room.code });
+        if (!result.ok) throw new Error(result.error.message);
+        return { peer, membership: result.data };
+      }));
+      await Promise.all([host, ...joined.map(({ peer }) => peer)].map((client) => emitAck<RoomView>(client, 'room:ready', { roomCode: created.data.room.code, ready: true, requestId: randomUUID() })));
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      if (!started.ok) throw new Error(started.error.message);
+      expect(started.data.players).toHaveLength(8);
+      expect(started.data.players.reduce((sum, player) => sum + player.cardCount, 0)).toBe(40);
+      const last = joined[6]!;
+      last.peer.disconnect();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const restored = await connect(url);
+      const resumed = await emitAck<RoomMembership>(restored, 'session:resume', { sessionToken: last.membership.sessionToken });
+      expect(resumed).toMatchObject({ ok: true, data: { playerId: last.membership.playerId } });
+    } finally { clients.forEach((client) => client.disconnect()); clients.length = 0; await app.close(); }
+  });
+
   it('starts a real six-player Grand Table with the 30-card deck', async () => {
     const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
     await app.listen({ host: '127.0.0.1', port: 0 });

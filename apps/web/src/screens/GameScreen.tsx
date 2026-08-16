@@ -5,14 +5,18 @@ import { playUiTone } from '../audio/ui-sounds';
 export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestart, onFullscreen }: { room: RoomView; game: GameView; playerId: string | null; onPlay: (indexes: number[]) => void; onChallenge: () => void; onRestart: () => void; onFullscreen: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const isTurn = game.turnPlayerId === playerId && game.phase !== 'ROUND_RESULT' && game.phase !== 'GAME_OVER';
-  const players = useMemo(() => room.players.map((player) => ({ ...player, cards: game.players.find((entry) => entry.playerId === player.id)?.cardCount ?? 0 })), [room.players, game.players]);
+  const players = useMemo(() => {
+    const seated = room.players.map((player) => ({ ...player, cards: game.players.find((entry) => entry.playerId === player.id)?.cardCount ?? 0 }));
+    const self = seated.find((player) => player.id === playerId);
+    return self ? [...seated.filter((player) => player.id !== playerId), self] : seated;
+  }, [room.players, game.players, playerId]);
   const toggle = (index: number) => setSelected((current) => current.includes(index) ? current.filter((item) => item !== index) : current.length < 3 ? [...current, index] : current);
   const play = () => { playUiTone(420); onPlay(selected); setSelected([]); };
   return <main className="game-screen">
     <p className="rotate-hint">为获得最佳牌桌视野，请横屏游玩</p>
     <header className="game-header"><div><p className="eyebrow">第 {game.roundNumber} 轮 · {game.gameMode === 'QUICK' ? '快速 7 秒' : '经典 15 秒'}</p><h1>目标牌：{game.targetCard}</h1></div><div className="game-header-actions"><span className="discard">已出 {game.discardCount} 张</span><button className="fullscreen-button" onClick={onFullscreen}>全屏</button></div></header>
     <section className="panel game-table"><h2>{game.phase === 'ROUND_RESULT' ? '质疑结果' : isTurn ? '轮到你出牌或质疑' : `等待 ${players.find((player) => player.id === game.turnPlayerId)?.nickname ?? '玩家'} 操作`}</h2>
-      <ul className={`game-players game-players--${players.length}`}>{players.map((player) => <li key={player.id} className={player.id === game.turnPlayerId ? 'active-turn' : ''}><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><span>{player.cards} 张手牌</span></li>)}</ul>
+      <ul className={`game-players game-players--${players.length}`}>{players.map((player) => <li key={player.id} className={`${player.id === game.turnPlayerId ? 'active-turn ' : ''}${player.id === playerId ? 'self-seat' : ''}`}><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><span>{player.cards} 张手牌</span></li>)}</ul>
     </section>
     <section className="hand" aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card ${selected.includes(index) ? 'selected' : ''}`} onClick={() => toggle(index)} disabled={!isTurn}><span>{card === 'JOKER' ? '★' : card}</span></button>)}</section>
     <button className="button button--primary play-button" disabled={!isTurn || selected.length === 0} onClick={play}>出 {selected.length || ''} 张牌</button>

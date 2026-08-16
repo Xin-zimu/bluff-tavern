@@ -51,6 +51,10 @@ React screen
 
 `CARDS_PER_RANK_BY_PLAYER_COUNT` 和 `REVOLVER_BULLETS_BY_PLAYER_COUNT` 是唯一的人数规则来源：2–4 人使用 20 张/一发，5–6 人使用 30 张/两发。房间的 `gameMode` 是服务端公开设置，开局后复制到私有游戏状态；Socket 层按 `turnDurationSeconds` 安排权威计时器，超时调用 `GameService.autoPlay`，客户端不能指定自动出牌牌面。计时器会在任何正常操作后重置且 `unref`，不会阻止服务关闭。
 
+## V2.5 八人同步
+
+7–8 人沿用同一权威状态机，但选取 40 张牌和两发实弹配置。客户端根据 viewer 的 playerId 对公开座位做相对排序，并将自己作为最后一个座位；八人网格将其跨两列放在底部中央，窄屏退化为一列。服务端仍按每位 viewer 单独发放 `GameView`，所以八人同步不会泄漏任何其他玩家的真实手牌。
+
 ## 安全与运维边界
 
 输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。V1.0 提供 Nginx 反代与 systemd 服务模板，Node 默认绑定回环地址并由 Nginx 暴露同源网页与 `/socket.io/`。HTTPS、限流、Redis、多实例与持久化仍属后续版本；部署前必须自行配置证书及域名。
