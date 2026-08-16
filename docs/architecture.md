@@ -63,6 +63,10 @@ React screen
 
 角色选择在大厅由 `RoomStore` 校验唯一性，公开快照仅含 `characterId`。每局游戏为每名玩家建立独立道具 Set，`GameView.items` 只发送 viewer 自己的库存；`game:useItem` 必须带 requestId 并由 `GameService` 消耗。换牌手套在服务器重排该玩家真实手牌、蜡封在服务器抵消下一次命中、怀表推进当前回合。表情是纯公开、受枚举校验的实时事件，不带游戏裁决。
 
+## V4.0 表现层
+
+原创 `bg_01_tavern_v1.png` 同时保存于 `assets/backgrounds/` 和 Web public 资源目录，生产构建引用 `/assets/backgrounds/`，不会依赖生成工具临时路径。CSS 动画只作用于公开表现状态，不能改变游戏规则；低性能标记、`prefers-reduced-motion` 和窄屏背景固定关闭保证中端手机可降级。
+
 ## 安全与运维边界
 
 输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。V1.0 提供 Nginx 反代与 systemd 服务模板，Node 默认绑定回环地址并由 Nginx 暴露同源网页与 `/socket.io/`。HTTPS、限流、Redis、多实例与持久化仍属后续版本；部署前必须自行配置证书及域名。
