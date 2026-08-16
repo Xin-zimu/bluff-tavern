@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GameView, RoomView } from '@bluff-tavern/shared';
 import { playUiTone } from '../audio/ui-sounds';
 
-export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestart, onFullscreen, onUseItem }: { room: RoomView; game: GameView; playerId: string | null; onPlay: (indexes: number[]) => void; onChallenge: () => void; onRestart: () => void; onFullscreen: () => void; onUseItem: (itemId: GameView['items'][number]) => void }) {
+export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestart, onFullscreen, onUseItem, onShare }: { room: RoomView; game: GameView; playerId: string | null; onPlay: (indexes: number[]) => void; onChallenge: () => void; onRestart: () => void; onFullscreen: () => void; onUseItem: (itemId: GameView['items'][number]) => void; onShare: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const isTurn = game.turnPlayerId === playerId && game.phase !== 'ROUND_RESULT' && game.phase !== 'GAME_OVER';
   const players = useMemo(() => {
@@ -25,6 +25,6 @@ export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestar
     {game.phase === 'CHALLENGE_WINDOW' && isTurn && <button className="button button--secondary play-button" onClick={() => { playUiTone(180); onChallenge(); }}>质疑上一手</button>}
     {game.challengeResult && <p className="future-note">翻牌：{game.challengeResult.revealedCards.join('、')}；{game.challengeResult.wasBluff ? '上一位玩家撒谎' : '质疑失败'}，失败者：{players.find((player) => player.id === game.challengeResult?.failedPlayerId)?.nickname}</p>}
     {game.punishment && <p className="future-note">轮盘第 {game.punishment.chamber + 1} 弹巢：{game.punishment.hit ? '中弹淘汰' : '空枪，继续游戏'}。</p>}
-    {game.phase === 'GAME_OVER' && <><h2>胜者：{players.find((player) => player.id === game.winnerId)?.nickname}</h2>{room.hostPlayerId === playerId && <button className="button button--primary play-button" onClick={onRestart}>再来一局</button>}</>}
+    {game.phase === 'GAME_OVER' && <><h2>胜者：{players.find((player) => player.id === game.winnerId)?.nickname}</h2>{game.summary && <><p className="future-note">{game.summary.playerCount} 人局 · {game.summary.durationSeconds} 秒 · 质疑 {game.summary.challengeCount} 次（成功 {game.summary.successfulChallenges}）</p><button className="fullscreen-button" onClick={onShare}>分享结果</button></>}{room.hostPlayerId === playerId && <button className="button button--primary play-button" onClick={onRestart}>再来一局</button>}</>}
   </main>;
 }

@@ -21,6 +21,10 @@ interface InternalGame {
   tavernEvent: GameView['tavernEvent'];
   items: Map<string, Set<GameView['items'][number]>>;
   protectedPlayerIds: Set<string>;
+  startedAt: number;
+  challengeCount: number;
+  successfulChallenges: number;
+  failedChallenges: number;
   revolver: { chamberCount: number; bulletPositions: Set<number>; currentChamber: number; shotsTaken: number };
 }
 
@@ -44,6 +48,7 @@ export class GameService {
       gameMode: room.settings.gameMode,
       settings: { ...room.settings }, tavernEvent: null,
       items: new Map(room.players.map((player) => [player.id, new Set(['SPYGLASS', 'SWAP_GLOVE', 'WAX_SEAL', 'TAVERN_MUG', 'POCKET_WATCH'] as const)])), protectedPlayerIds: new Set(),
+      startedAt: Date.now(), challengeCount: 0, successfulChallenges: 0, failedChallenges: 0,
       revolver: this.createRevolver(room.players.length, room.settings.bulletCount),
     };
     this.dealRound(game);
@@ -98,6 +103,8 @@ export class GameService {
       wasBluff,
       revealedCards: [...game.lastPlay.cards],
     };
+    game.challengeCount += 1;
+    if (wasBluff) game.successfulChallenges += 1; else game.failedChallenges += 1;
     game.phase = 'ROUND_RESULT';
     return this.getView(roomCode, challengerId);
   }
@@ -149,6 +156,7 @@ export class GameService {
       alivePlayerIds: [...game.alivePlayerIds],
       winnerId: game.winnerId,
       items: [...(game.items.get(viewerId) ?? [])],
+      summary: game.winnerId ? { winnerId: game.winnerId, playerCount: game.playerIds.length, durationSeconds: Math.max(0, Math.floor((Date.now() - game.startedAt) / 1_000)), challengeCount: game.challengeCount, successfulChallenges: game.successfulChallenges, failedChallenges: game.failedChallenges } : null,
     };
   }
 

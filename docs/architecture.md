@@ -67,6 +67,10 @@ React screen
 
 原创 `bg_01_tavern_v1.png` 同时保存于 `assets/backgrounds/` 和 Web public 资源目录，生产构建引用 `/assets/backgrounds/`，不会依赖生成工具临时路径。CSS 动画只作用于公开表现状态，不能改变游戏规则；低性能标记、`prefers-reduced-motion` 和窄屏背景固定关闭保证中端手机可降级。
 
+## V4.5 结算与社交
+
+`GameService` 从服务端状态生成 `GameSummary`，客户端仅在 `GAME_OVER` 读取该快照。匿名 localStorage 以当前 playerId 聚合局数、胜场和质疑表现，并用组件内去重防止同一快照重复计数。分享只使用浏览器原生 Web Share/Clipboard 文本，社交输入保持固定表情枚举，避免自由文本审核与存储风险。
+
 ## 安全与运维边界
 
 输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。V1.0 提供 Nginx 反代与 systemd 服务模板，Node 默认绑定回环地址并由 Nginx 暴露同源网页与 `/socket.io/`。HTTPS、限流、Redis、多实例与持久化仍属后续版本；部署前必须自行配置证书及域名。

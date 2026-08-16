@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ConnectionBadge } from './components/ConnectionBadge';
 import { socket } from './socket/client';
 import { HomeScreen } from './screens/HomeScreen';
@@ -11,6 +11,17 @@ export function App() {
   const state = useSessionStore();
   const { setConnection, setNetworkOnline, updateRoom, leaveRoom: clearRoom, setNotice, setGame } = state;
   const [busy, setBusy] = useState(false);
+  const recordedSummary = useRef<string | null>(null);
+  useEffect(() => {
+    const summary = state.game?.summary;
+    if (!summary || !state.playerId) { recordedSummary.current = null; return; }
+    const key = `${summary.winnerId}:${summary.durationSeconds}:${summary.challengeCount}`;
+    if (recordedSummary.current === key) return;
+    recordedSummary.current = key;
+    const saved = JSON.parse(localStorage.getItem('bluff-tavern.local-stats') ?? '{"games":0,"wins":0,"challenges":0,"successfulChallenges":0}') as { games: number; wins: number; challenges: number; successfulChallenges: number };
+    const next = { games: saved.games + 1, wins: saved.wins + Number(summary.winnerId === state.playerId), challenges: saved.challenges + summary.challengeCount, successfulChallenges: saved.successfulChallenges + summary.successfulChallenges };
+    localStorage.setItem('bluff-tavern.local-stats', JSON.stringify(next));
+  }, [state.game, state.playerId]);
   useEffect(() => {
     const resumeStoredSession = () => {
       const sessionToken = localStorage.getItem('bluff-tavern.session-token');
@@ -116,12 +127,19 @@ export function App() {
     if (!document.fullscreenElement) void document.documentElement.requestFullscreen().catch(() => state.setNotice('当前浏览器无法进入全屏'));
     else void document.exitFullscreen();
   };
+  const shareResult = () => {
+    const summary = state.game?.summary;
+    if (!summary) return;
+    const text = `诡牌酒馆战报：${summary.playerCount} 人局，${summary.challengeCount} 次质疑，胜者已诞生！`;
+    if (navigator.share) void navigator.share({ title: '诡牌酒馆战报', text }).catch(() => undefined);
+    else void navigator.clipboard?.writeText(text).then(() => state.setNotice('战报已复制'));
+  };
   const lowPerformance = navigator.hardwareConcurrency <= 4 || ('deviceMemory' in navigator && (navigator as Navigator & { deviceMemory?: number }).deviceMemory !== undefined && (navigator as Navigator & { deviceMemory?: number }).deviceMemory! <= 4);
 
   return <div className={`app-shell${lowPerformance ? ' app-shell--low-power' : ''}`}>
     <ConnectionBadge status={state.connection} networkOnline={state.networkOnline} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
-    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} onUseItem={useItem} />
+    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
     <footer>V1.0 · 原创占位视觉 · 不含原游戏版权资产</footer>

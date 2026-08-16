@@ -71,6 +71,16 @@ export interface GameView {
   alivePlayerIds: string[];
   winnerId: string | null;
   items: ItemId[];
+  summary: GameSummary | null;
+}
+
+export interface GameSummary {
+  winnerId: string;
+  playerCount: number;
+  durationSeconds: number;
+  challengeCount: number;
+  successfulChallenges: number;
+  failedChallenges: number;
 }
 
 export interface AckSuccess<T> { ok: true; data: T }
