@@ -11,7 +11,7 @@ import { cryptoRandom } from './game/random.js';
 export async function createApp(config: ServerConfig) {
   const app = Fastify({ logger: { level: config.logLevel } });
   await app.register(cors, { origin: config.clientOrigin });
-  app.get('/health', () => ({ status: 'ok', version: '0.1.0', timestamp: Date.now() }));
+  app.get('/health', () => ({ status: 'ok', version: '5.0.0', timestamp: Date.now() }));
   const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(app.server, {
     cors: { origin: config.clientOrigin }, transports: ['websocket', 'polling'],
   });
