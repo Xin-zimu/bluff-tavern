@@ -9,4 +9,9 @@ export const CARDS_PER_RANK_BY_PLAYER_COUNT = [
   { maxPlayers: 6, copiesPerRank: 9, jokers: 3 },
   { maxPlayers: 8, copiesPerRank: 12, jokers: 4 },
 ] as const;
+export const REVOLVER_BULLETS_BY_PLAYER_COUNT = [
+  { maxPlayers: 4, bullets: 1 },
+  { maxPlayers: 6, bullets: 2 },
+  { maxPlayers: 8, bullets: 2 },
+] as const;
 export const MAX_CARDS_PER_PLAY = 3;

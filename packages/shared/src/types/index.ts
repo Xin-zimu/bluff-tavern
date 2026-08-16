@@ -1,9 +1,11 @@
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 export type RoomStatus = 'LOBBY' | 'STARTING' | 'PLAYING' | 'ROUND_RESULT' | 'GAME_OVER' | 'CLOSED';
 export type PlayerStatus = 'CONNECTED' | 'DISCONNECTED' | 'READY' | 'PLAYING' | 'ELIMINATED' | 'SPECTATING';
+export type GameMode = 'CLASSIC' | 'QUICK';
 
 export interface RoomSettings {
   maxPlayers: number;
+  gameMode: GameMode;
 }
 
 export interface PlayerView {
@@ -45,6 +47,8 @@ export interface GamePlayerView {
 }
 
 export interface GameView {
+  gameMode: GameMode;
+  turnDurationSeconds: number;
   roundNumber: number;
   phase: GamePhase;
   targetCard: Exclude<CardRank, 'JOKER'>;

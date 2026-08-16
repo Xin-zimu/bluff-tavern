@@ -47,6 +47,10 @@ React screen
 
 无法可靠读取跨平台的电池省电模式，因此 V1.5 使用 `hardwareConcurrency` / `deviceMemory` 的保守阈值禁用可选动画，并尊重 `prefers-reduced-motion`；不影响玩法与服务端状态。
 
+## V2.0 大酒桌
+
+`CARDS_PER_RANK_BY_PLAYER_COUNT` 和 `REVOLVER_BULLETS_BY_PLAYER_COUNT` 是唯一的人数规则来源：2–4 人使用 20 张/一发，5–6 人使用 30 张/两发。房间的 `gameMode` 是服务端公开设置，开局后复制到私有游戏状态；Socket 层按 `turnDurationSeconds` 安排权威计时器，超时调用 `GameService.autoPlay`，客户端不能指定自动出牌牌面。计时器会在任何正常操作后重置且 `unref`，不会阻止服务关闭。
+
 ## 安全与运维边界
 
 输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。V1.0 提供 Nginx 反代与 systemd 服务模板，Node 默认绑定回环地址并由 Nginx 暴露同源网页与 `/socket.io/`。HTTPS、限流、Redis、多实例与持久化仍属后续版本；部署前必须自行配置证书及域名。

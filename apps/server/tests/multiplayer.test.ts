@@ -21,6 +21,37 @@ function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEve
 }
 
 describe('real Socket.IO multiplayer', () => {
+  it('starts a real six-player Grand Table with the 30-card deck', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'Host6' });
+      if (!created.ok) throw new Error(created.error.message);
+      const peers = await Promise.all(Array.from({ length: 5 }, async (_, index) => {
+        const peer = await connect(url);
+        const joined = await emitAck<RoomMembership>(peer, 'room:join', { nickname: `P${index + 2}`, roomCode: created.data.room.code });
+        if (!joined.ok) throw new Error(joined.error.message);
+        return peer;
+      }));
+      const settings = await emitAck<RoomView>(host, 'room:updateSettings', { roomCode: created.data.room.code, maxPlayers: 6, gameMode: 'QUICK', requestId: randomUUID() });
+      expect(settings).toMatchObject({ ok: true, data: { settings: { maxPlayers: 6, gameMode: 'QUICK' } } });
+      await Promise.all([host, ...peers].map((client) => emitAck<RoomView>(client, 'room:ready', { roomCode: created.data.room.code, ready: true, requestId: randomUUID() })));
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(started).toMatchObject({ ok: true, data: { gameMode: 'QUICK', turnDurationSeconds: 7 } });
+      if (!started.ok) throw new Error('Game did not start');
+      expect(started.data.players).toHaveLength(6);
+      expect(started.data.players.reduce((sum, player) => sum + player.cardCount, 0)).toBe(30);
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
   it('synchronizes four players joining and one disconnecting', async () => {
     const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
     await app.listen({ host: '127.0.0.1', port: 0 });

@@ -11,6 +11,7 @@ interface AppLogger {
 }
 
 const invalid = { ok: false as const, error: { code: 'INVALID_REQUEST', message: '输入内容无效' } };
+const turnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const failure = (error: unknown) => error instanceof RoomError
   ? { ok: false as const, error: { code: error.code, message: error.message } }
   : { ok: false as const, error: { code: 'SERVER_ERROR', message: '服务器暂时不可用' } };
@@ -73,7 +74,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     const cached = processedRequests.get(parsed.data.requestId);
     if (cached) return ack(cached);
     try {
-      const room = rooms.updateSettings(parsed.data.roomCode, socket.data.playerId!, { maxPlayers: parsed.data.maxPlayers });
+      const room = rooms.updateSettings(parsed.data.roomCode, socket.data.playerId!, { maxPlayers: parsed.data.maxPlayers, gameMode: parsed.data.gameMode });
       const result = { ok: true as const, data: room };
       processedRequests.set(parsed.data.requestId, result);
       logger.info({ event: 'room_settings_updated', roomCode: room.code, playerId: socket.data.playerId });
@@ -117,6 +118,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       logger.info({ event: 'game_started', roomCode: room.code, playerId: socket.data.playerId });
       io.to(room.code).emit('room:state', room);
       broadcastGameState(io, rooms, games, room.code);
+      scheduleTurn(io, rooms, games, room.code, logger);
       ack(result);
     } catch (error) { ack(failure(error)); }
   });
@@ -133,6 +135,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       logger.info({ event: 'cards_played', roomCode: parsed.data.roomCode, playerId: socket.data.playerId, count: result.playedCount });
       io.to(parsed.data.roomCode).emit('game:cardsPlayed', { playerId: socket.data.playerId!, count: result.playedCount, roundNumber: result.state.roundNumber });
       broadcastGameState(io, rooms, games, parsed.data.roomCode);
+      scheduleTurn(io, rooms, games, parsed.data.roomCode, logger);
       ack(ackResult);
     } catch (error) { ack(failure(error)); }
   });
@@ -163,6 +166,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
         io.to(room.code).emit('game:over', punishment.state);
       }
       broadcastGameState(io, rooms, games, parsed.data.roomCode);
+      scheduleTurn(io, rooms, games, parsed.data.roomCode, logger);
       io.to(parsed.data.roomCode).emit('game:punishmentResult', punishment.state);
       ack(result);
     } catch (error) { ack(failure(error)); }
@@ -180,6 +184,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       processedGameRequests.set(parsed.data.requestId, result);
       io.to(room.code).emit('room:state', room);
       broadcastGameState(io, rooms, games, room.code);
+      scheduleTurn(io, rooms, games, room.code, logger);
       ack(result);
     } catch (error) { ack(failure(error)); }
   });
@@ -233,4 +238,23 @@ function broadcastGameState(io: GameServer, rooms: RoomStore, games: GameService
     io.to(socketId).emit('game:state', state);
     io.to(socketId).emit('game:turnStarted', state);
   }
+}
+
+function scheduleTurn(io: GameServer, rooms: RoomStore, games: GameService, roomCode: string, logger: AppLogger): void {
+  const previous = turnTimers.get(roomCode);
+  if (previous) clearTimeout(previous);
+  let view: GameView;
+  try { view = games.getView(roomCode, games.getViews(roomCode).keys().next().value!); } catch { return; }
+  if (view.phase === 'GAME_OVER') return;
+  const timer = setTimeout(() => {
+    try {
+      const result = games.autoPlay(roomCode);
+      logger.info({ event: 'turn_timeout_auto_played', roomCode, playerId: result.state.lastPlay?.playerId });
+      io.to(roomCode).emit('game:cardsPlayed', { playerId: result.state.lastPlay!.playerId, count: result.playedCount, roundNumber: result.state.roundNumber });
+      broadcastGameState(io, rooms, games, roomCode);
+      scheduleTurn(io, rooms, games, roomCode, logger);
+    } catch { /* A manual action won the race or the room has ended. */ }
+  }, view.turnDurationSeconds * 1_000);
+  timer.unref();
+  turnTimers.set(roomCode, timer);
 }

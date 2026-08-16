@@ -21,7 +21,7 @@ export class RoomStore {
     const now = Date.now();
     this.rooms.set(code, {
       id: randomUUID(), code, hostPlayerId: player.id, status: 'LOBBY', maxPlayers: MAX_PLAYERS,
-      settings: { maxPlayers: MAX_PLAYERS }, players: [player], createdAt: now,
+      settings: { maxPlayers: MAX_PLAYERS, gameMode: 'CLASSIC' }, players: [player], createdAt: now,
     });
     return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken };
   }

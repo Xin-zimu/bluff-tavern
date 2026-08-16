@@ -67,9 +67,9 @@ export function App() {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
-  const updateMaxPlayers = (maxPlayers: number) => {
+  const updateSettings = (maxPlayers: number, gameMode: 'CLASSIC' | 'QUICK') => {
     if (!state.room) return;
-    socket.emit('room:updateSettings', { roomCode: state.room.code, maxPlayers, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('room:updateSettings', { roomCode: state.room.code, maxPlayers, gameMode, requestId: crypto.randomUUID() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
@@ -113,7 +113,7 @@ export function App() {
     <ConnectionBadge status={state.connection} networkOnline={state.networkOnline} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
     {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} />
-      : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onMaxPlayersChange={updateMaxPlayers} onKick={kickPlayer} onStart={startGame} />
+      : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
     <footer>V1.0 · 原创占位视觉 · 不含原游戏版权资产</footer>
   </div>;

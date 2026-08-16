@@ -1,4 +1,4 @@
-import { CARDS_PER_RANK_BY_PLAYER_COUNT, type CardRank, type GamePhase, type GameView, type RoomView } from '@bluff-tavern/shared';
+import { CARDS_PER_RANK_BY_PLAYER_COUNT, REVOLVER_BULLETS_BY_PLAYER_COUNT, type CardRank, type GamePhase, type GameView, type RoomView } from '@bluff-tavern/shared';
 import { RoomError } from '../rooms/room-store.js';
 import type { RandomService } from './random.js';
 
@@ -16,6 +16,7 @@ interface InternalGame {
   punishment: GameView['punishment'];
   alivePlayerIds: Set<string>;
   winnerId: string | null;
+  gameMode: RoomView['settings']['gameMode'];
   revolver: { chamberCount: number; bulletPositions: Set<number>; currentChamber: number; shotsTaken: number };
 }
 
@@ -36,7 +37,8 @@ export class GameService {
       discardCount: 0,
       phase: 'TURN', lastPlay: null, challengeResult: null,
       punishment: null, alivePlayerIds: new Set(room.players.map((player) => player.id)), winnerId: null,
-      revolver: this.createRevolver(),
+      gameMode: room.settings.gameMode,
+      revolver: this.createRevolver(room.players.length),
     };
     this.dealRound(game);
     this.games.set(room.code, game);
@@ -59,6 +61,14 @@ export class GameService {
     if ([...game.hands.values()].some((remaining) => remaining.length > 0)) this.skipEmptyHands(game);
     game.phase = 'CHALLENGE_WINDOW';
     return { state: this.getView(roomCode, playerId), playedCount: cardIndexes.length, roundAdvanced: false };
+  }
+
+  autoPlay(roomCode: string): { state: GameView; playedCount: number; roundAdvanced: boolean } {
+    const game = this.requireGame(roomCode);
+    const playerId = game.playerIds[game.turnIndex]!;
+    const hand = game.hands.get(playerId);
+    if (!hand || hand.length === 0) throw new RoomError('NO_CARD_TO_PLAY', '当前玩家没有可自动出的手牌');
+    return this.playCards(roomCode, playerId, [this.random.nextInt(hand.length)]);
   }
 
   challenge(roomCode: string, challengerId: string): GameView {
@@ -106,6 +116,8 @@ export class GameService {
     const game = this.requireGame(roomCode);
     const hand = game.hands.get(viewerId) ?? [];
     return {
+      gameMode: game.gameMode,
+      turnDurationSeconds: game.gameMode === 'QUICK' ? 7 : 15,
       roundNumber: game.roundNumber,
       phase: game.phase,
       targetCard: game.targetCard,
@@ -165,8 +177,16 @@ export class GameService {
     return game;
   }
 
-  private createRevolver() {
+  private createRevolver(playerCount: number) {
     const chamberCount = 6;
-    return { chamberCount, bulletPositions: new Set([this.random.nextInt(chamberCount)]), currentChamber: 0, shotsTaken: 0 };
+    const bullets = REVOLVER_BULLETS_BY_PLAYER_COUNT.find((entry) => playerCount <= entry.maxPlayers)?.bullets;
+    if (!bullets) throw new Error('Missing revolver configuration');
+    const positions = new Set<number>();
+    while (positions.size < bullets) {
+      let position = this.random.nextInt(chamberCount);
+      while (positions.has(position)) position = (position + 1) % chamberCount;
+      positions.add(position);
+    }
+    return { chamberCount, bulletPositions: positions, currentChamber: 0, shotsTaken: 0 };
   }
 }

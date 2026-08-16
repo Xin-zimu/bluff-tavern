@@ -5,12 +5,12 @@ interface LobbyProps {
   playerId: string | null;
   onLeave: () => void;
   onReady: (ready: boolean) => void;
-  onMaxPlayersChange: (maxPlayers: number) => void;
+  onSettingsChange: (maxPlayers: number, gameMode: RoomView['settings']['gameMode']) => void;
   onKick: (playerId: string) => void;
   onStart: () => void;
 }
 
-export function LobbyScreen({ room, playerId, onLeave, onReady, onMaxPlayersChange, onKick, onStart }: LobbyProps) {
+export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange, onKick, onStart }: LobbyProps) {
   const copyCode = () => void navigator.clipboard?.writeText(room.code);
   const isHost = room.hostPlayerId === playerId;
   const self = room.players.find((player) => player.id === playerId);
@@ -26,8 +26,13 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onMaxPlayersChan
     <section className="panel player-panel">
       <div className="panel-title"><h2>已入席玩家</h2><span>{room.players.length} / {room.maxPlayers}</span></div>
       {isHost && <label className="settings-control" htmlFor="max-players">最大人数
-        <select id="max-players" value={room.settings.maxPlayers} onChange={(event) => onMaxPlayersChange(Number(event.target.value))}>
+        <select id="max-players" value={room.settings.maxPlayers} onChange={(event) => onSettingsChange(Number(event.target.value), room.settings.gameMode)}>
           {[2, 3, 4, 5, 6, 7, 8].map((count) => <option key={count} value={count} disabled={count < room.players.length}>{count} 人</option>)}
+        </select>
+      </label>}
+      {isHost && <label className="settings-control" htmlFor="game-mode">节奏
+        <select id="game-mode" value={room.settings.gameMode} onChange={(event) => onSettingsChange(room.settings.maxPlayers, event.target.value as RoomView['settings']['gameMode'])}>
+          <option value="CLASSIC">经典（15 秒）</option><option value="QUICK">快速（7 秒）</option>
         </select>
       </label>}
       <ul className="player-list">
