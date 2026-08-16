@@ -1,4 +1,4 @@
-# V0.1 架构
+# V0.2 架构
 
 ## 技术选择
 
@@ -22,13 +22,13 @@ React screen
 
 - `config/`：环境配置与启动边界。
 - `rooms/room-code.ts`：可注入随机源的房间码生成器；方便固定随机单测。
-- `rooms/room-store.ts`：房间聚合根，负责容量、昵称冲突、创建者与生命周期。
+- `rooms/room-store.ts`：房间聚合根，负责容量、昵称冲突、创建者、准备状态、房主授权、踢人与生命周期。
 - `socket/`：解析客户端意图、更新 socket membership、广播公开快照。
 - 未来的 `game/`、`auth/`、`persistence/` 目录在需要时添加，避免空抽象。
 
 ## 后续扩展点
 
-- 房主/准备：在共享协议新增命令，`RoomStore` 校验 `hostPlayerId` 和大厅状态。
+- 房主/准备：已在 V0.2 实现；`RoomStore` 校验 `hostPlayerId` 与大厅状态，配置变更会统一重置准备状态。
 - 牌局：独立 `GameStateMachine`，房间只持有状态机引用，所有判定留在服务端。
 - 断线重连：引入密码学随机 `sessionToken`、连接与玩家身份分离、宽限计时器；当前明确采用立即离开语义。
 - 多实例：把房间仓储迁移到 Redis，并启用 Socket.IO adapter。

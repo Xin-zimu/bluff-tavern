@@ -1,6 +1,6 @@
 # 诡牌酒馆 / Bluff Tavern
 
-手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V0.1 工程骨架（扩展房间联机验收）**：支持创建房间、输入 6 位房间码加入、主动离开/断开清理，以及玩家列表实时同步。尚未进入准备、牌局、断线重连等 V0.2+ 功能。
+手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V0.2 房间系统**：支持创建与房间码加入、实时玩家列表、房主、准备、最大人数配置和踢人。尚未进入牌局或断线重连。
 
 ## 技术栈
 
@@ -30,7 +30,7 @@ pnpm test
 pnpm build
 ```
 
-真实多人联机测试在 `apps/server/tests/multiplayer.test.ts`，会启动临时服务并连接四个真实 Socket.IO 客户端。
+真实多人联机测试在 `apps/server/tests/multiplayer.test.ts`，会启动临时服务并连接四个真实 Socket.IO 客户端，覆盖房主权限、准备、配置与踢人。
 
 ## 目录
 
@@ -48,7 +48,7 @@ docs/                     架构、协议与验收记录
 
 - 状态仅在内存中；服务重启会清空房间。
 - 当前断线会立即离开房间，不是断线重连。session token 与宽限期将在后续阶段实现。
-- “创建者”字段已保留并在创建者离开后转移，但 V0.1 没有房主权限操作。
-- 尚无准备、踢人、牌局、观战、聊天、数据库或公网部署配置。
+- 房主离开后会转移给最早入席的剩余玩家；修改最大人数会取消所有人的准备状态。
+- 尚无牌局、观战、聊天、数据库或公网部署配置。
 
-详见 [`docs/architecture.md`](docs/architecture.md) 与 [`docs/V0.1-acceptance.md`](docs/V0.1-acceptance.md)。
+详见 [`docs/architecture.md`](docs/architecture.md)、[`docs/protocol.md`](docs/protocol.md) 与 [`docs/V0.2-acceptance.md`](docs/V0.2-acceptance.md)。

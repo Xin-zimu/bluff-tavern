@@ -51,6 +51,10 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .avatar { flex: 0 0 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #5b1f28; border: 2px solid #a67c3d; font-family: Georgia, serif; }
 .avatar--1 { background: #35452e; }.avatar--2 { background: #333b53; }.avatar--3 { background: #3d303f; }
 .host-mark { margin-left: auto; font-size: .65rem; color: #d4a85d; border: 1px solid #7b5c31; padding: 3px 5px; }
+.ready-mark { margin-left: auto; font-size: .65rem; color: #9ed18c; border: 1px solid #527845; padding: 3px 5px; }
+.settings-control { display: flex; justify-content: space-between; align-items: center; margin: 16px 0; color: #c8b9a1; }
+.settings-control select { min-height: 38px; border: 1px solid #6e625b; color: #f2c777; background: #120d0b; padding: 0 10px; }
+.kick-button { margin-left: auto; min-height: 34px; color: #d8aaa1; border: 1px solid #7a2632; background: transparent; border-radius: 3px; cursor: pointer; }
 .future-note { color: #756960; font-size: .75rem; text-align: center; margin-bottom: 0; }
 @media (max-width: 720px) {
   .app-shell { padding-top: max(56px, env(safe-area-inset-top)); }

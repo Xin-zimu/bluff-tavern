@@ -7,16 +7,17 @@ import { useSessionStore } from './stores/session-store';
 
 export function App() {
   const state = useSessionStore();
-  const { setConnection, updateRoom, leaveRoom: clearRoom } = state;
+  const { setConnection, updateRoom, leaveRoom: clearRoom, setNotice } = state;
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     const connected = () => setConnection('connected');
     const disconnected = () => setConnection('disconnected');
     const closeRoom = () => clearRoom();
-    socket.on('connect', connected).on('disconnect', disconnected).on('room:state', updateRoom).on('room:closed', closeRoom);
+    const kicked = (message: string) => { clearRoom(); setNotice(message); };
+    socket.on('connect', connected).on('disconnect', disconnected).on('room:state', updateRoom).on('room:closed', closeRoom).on('room:kicked', kicked);
     socket.connect();
-    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', updateRoom).off('room:closed', closeRoom); socket.disconnect(); };
-  }, [setConnection, updateRoom, clearRoom]);
+    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', updateRoom).off('room:closed', closeRoom).off('room:kicked', kicked); socket.disconnect(); };
+  }, [setConnection, updateRoom, clearRoom, setNotice]);
 
   const createRoom = (nickname: string) => {
     setBusy(true);
@@ -38,12 +39,30 @@ export function App() {
     if (!state.room) return;
     socket.emit('room:leave', { roomCode: state.room.code }, () => state.leaveRoom());
   };
+  const sendReady = (ready: boolean) => {
+    if (!state.room) return;
+    socket.emit('room:ready', { roomCode: state.room.code, ready, requestId: crypto.randomUUID() }, (result) => {
+      if (!result.ok) state.setNotice(result.error.message);
+    });
+  };
+  const updateMaxPlayers = (maxPlayers: number) => {
+    if (!state.room) return;
+    socket.emit('room:updateSettings', { roomCode: state.room.code, maxPlayers, requestId: crypto.randomUUID() }, (result) => {
+      if (!result.ok) state.setNotice(result.error.message);
+    });
+  };
+  const kickPlayer = (targetPlayerId: string) => {
+    if (!state.room) return;
+    socket.emit('room:kick', { roomCode: state.room.code, targetPlayerId, requestId: crypto.randomUUID() }, (result) => {
+      if (!result.ok) state.setNotice(result.error.message);
+    });
+  };
 
   return <div className="app-shell">
     <ConnectionBadge status={state.connection} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
-    {state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} />
+    {state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onMaxPlayersChange={updateMaxPlayers} onKick={kickPlayer} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V0.1 · 原创占位视觉 · 不含原游戏版权资产</footer>
+    <footer>V0.2 · 原创占位视觉 · 不含原游戏版权资产</footer>
   </div>;
 }

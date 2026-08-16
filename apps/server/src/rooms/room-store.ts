@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { MAX_PLAYERS, type PlayerView, type RoomView } from '@bluff-tavern/shared';
+import { MAX_PLAYERS, type PlayerView, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
 import { createRoomCode, type RandomIndex } from './room-code.js';
 
 interface InternalPlayer extends PlayerView { socketId: string }
 interface InternalRoom extends Omit<RoomView, 'players'> { players: InternalPlayer[] }
+export interface Departure { code: string; player: PlayerView; room: RoomView | null }
+export interface KickResult { room: RoomView; kickedPlayer: PlayerView; kickedSocketId: string }
 
 export class RoomError extends Error {
   constructor(public readonly code: string, message: string) { super(message); }
@@ -19,7 +21,7 @@ export class RoomStore {
     const now = Date.now();
     this.rooms.set(code, {
       id: randomUUID(), code, hostPlayerId: player.id, status: 'LOBBY', maxPlayers: MAX_PLAYERS,
-      players: [player], createdAt: now,
+      settings: { maxPlayers: MAX_PLAYERS }, players: [player], createdAt: now,
     });
     return { room: this.getView(code), playerId: player.id };
   }
@@ -36,19 +38,51 @@ export class RoomStore {
     return { room: this.getView(code), playerId: player.id };
   }
 
-  leaveBySocket(socketId: string): { code: string; room: RoomView | null } | null {
+  setReady(code: string, playerId: string, ready: boolean): RoomView {
+    const room = this.requireMember(code, playerId);
+    if (room.status !== 'LOBBY') throw new RoomError('ROOM_NOT_READYABLE', '当前房间无法准备');
+    const player = room.players.find((candidate) => candidate.id === playerId)!;
+    player.status = ready ? 'READY' : 'CONNECTED';
+    return this.getView(code);
+  }
+
+  updateSettings(code: string, hostPlayerId: string, settings: RoomSettings): RoomView {
+    const room = this.requireMember(code, hostPlayerId);
+    this.requireHost(room, hostPlayerId);
+    if (room.status !== 'LOBBY') throw new RoomError('ROOM_NOT_CONFIGURABLE', '牌局已经开始');
+    if (settings.maxPlayers < room.players.length) throw new RoomError('MAX_PLAYERS_TOO_LOW', '最大人数不能小于当前玩家数');
+    room.settings = { ...settings };
+    room.maxPlayers = settings.maxPlayers;
+    room.players.forEach((player) => { player.status = 'CONNECTED'; });
+    return this.getView(code);
+  }
+
+  kick(code: string, hostPlayerId: string, targetPlayerId: string): KickResult {
+    const room = this.requireMember(code, hostPlayerId);
+    this.requireHost(room, hostPlayerId);
+    if (room.status !== 'LOBBY') throw new RoomError('ROOM_NOT_CONFIGURABLE', '牌局已经开始');
+    if (targetPlayerId === hostPlayerId) throw new RoomError('CANNOT_KICK_HOST', '房主不能踢出自己');
+    const index = room.players.findIndex((player) => player.id === targetPlayerId);
+    if (index < 0) throw new RoomError('PLAYER_NOT_FOUND', '玩家不在房间中');
+    const kicked = room.players[index]!;
+    room.players.splice(index, 1);
+    return { room: this.getView(code), kickedPlayer: this.toPlayerView(kicked), kickedSocketId: kicked.socketId };
+  }
+
+  leaveBySocket(socketId: string): Departure | null {
     for (const [code, room] of this.rooms) {
       const index = room.players.findIndex((player) => player.socketId === socketId);
       if (index < 0) continue;
+      const departed = room.players[index]!;
       room.players.splice(index, 1);
       if (room.players.length === 0) {
         this.rooms.delete(code);
-        return { code, room: null };
+        return { code, player: this.toPlayerView(departed), room: null };
       }
-      if (room.hostPlayerId === room.players[index]?.id || !room.players.some((p) => p.id === room.hostPlayerId)) {
+      if (room.hostPlayerId === departed.id || !room.players.some((p) => p.id === room.hostPlayerId)) {
         room.hostPlayerId = room.players[0]!.id;
       }
-      return { code, room: this.getView(code) };
+      return { code, player: this.toPlayerView(departed), room: this.getView(code) };
     }
     return null;
   }
@@ -60,12 +94,8 @@ export class RoomStore {
     return {
       id: room.id, code: room.code, hostPlayerId: room.hostPlayerId, status: room.status,
       maxPlayers: room.maxPlayers, createdAt: room.createdAt,
-      players: room.players.map((player) => ({
-        id: player.id,
-        nickname: player.nickname,
-        status: player.status,
-        joinedAt: player.joinedAt,
-      })),
+      settings: { ...room.settings },
+      players: room.players.map((player) => this.toPlayerView(player)),
     };
   }
 
@@ -73,6 +103,20 @@ export class RoomStore {
     const room = this.rooms.get(code);
     if (!room) throw new RoomError('ROOM_NOT_FOUND', '房间不存在');
     return room;
+  }
+
+  private requireMember(code: string, playerId: string): InternalRoom {
+    const room = this.requireRoom(code);
+    if (!room.players.some((player) => player.id === playerId)) throw new RoomError('NOT_IN_ROOM', '你不在这个房间中');
+    return room;
+  }
+
+  private requireHost(room: InternalRoom, playerId: string): void {
+    if (room.hostPlayerId !== playerId) throw new RoomError('NOT_HOST', '你不是房主');
+  }
+
+  private toPlayerView(player: InternalPlayer): PlayerView {
+    return { id: player.id, nickname: player.nickname, status: player.status, joinedAt: player.joinedAt };
   }
 
   private makePlayer(nickname: string, socketId: string): InternalPlayer {
