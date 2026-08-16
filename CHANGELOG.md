@@ -2,6 +2,13 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [5.0.0] - 2026-08-17
+
+### Added
+
+- Docker/Compose、GitHub Actions CI、MIT LICENSE、SECURITY、游戏规则和测试文档。
+- Socket 命令限流、优雅退出及最终发布资产审查。
+
 ## [4.5.0] - 2026-08-17
 
 ### Added

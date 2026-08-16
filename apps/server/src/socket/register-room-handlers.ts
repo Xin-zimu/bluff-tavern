@@ -19,6 +19,15 @@ const failure = (error: unknown) => error instanceof RoomError
 export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: RoomStore, games: GameService, logger: AppLogger): void {
   const processedRequests = new Map<string, Ack<RoomView>>();
   const processedGameRequests = new Map<string, Ack<GameView>>();
+  let windowStartedAt = Date.now();
+  let commandsInWindow = 0;
+  socket.use((_event, next) => {
+    const now = Date.now();
+    if (now - windowStartedAt > 10_000) { windowStartedAt = now; commandsInWindow = 0; }
+    commandsInWindow += 1;
+    if (commandsInWindow > 50) { next(new Error('RATE_LIMITED')); return; }
+    next();
+  });
   socket.on('room:create', (payload, ack) => {
     const parsed = createRoomSchema.safeParse(payload);
     if (!parsed.success) return ack(invalid);
