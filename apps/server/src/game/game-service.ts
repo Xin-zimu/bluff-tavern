@@ -19,6 +19,8 @@ interface InternalGame {
   gameMode: RoomView['settings']['gameMode'];
   settings: RoomView['settings'];
   tavernEvent: GameView['tavernEvent'];
+  items: Map<string, Set<GameView['items'][number]>>;
+  protectedPlayerIds: Set<string>;
   revolver: { chamberCount: number; bulletPositions: Set<number>; currentChamber: number; shotsTaken: number };
 }
 
@@ -41,6 +43,7 @@ export class GameService {
       punishment: null, alivePlayerIds: new Set(room.players.map((player) => player.id)), winnerId: null,
       gameMode: room.settings.gameMode,
       settings: { ...room.settings }, tavernEvent: null,
+      items: new Map(room.players.map((player) => [player.id, new Set(['SPYGLASS', 'SWAP_GLOVE', 'WAX_SEAL', 'TAVERN_MUG', 'POCKET_WATCH'] as const)])), protectedPlayerIds: new Set(),
       revolver: this.createRevolver(room.players.length, room.settings.bulletCount),
     };
     this.dealRound(game);
@@ -74,6 +77,16 @@ export class GameService {
     return this.playCards(roomCode, playerId, [this.random.nextInt(hand.length)]);
   }
 
+  useItem(roomCode: string, playerId: string, itemId: GameView['items'][number]): GameView {
+    const game = this.requireGame(roomCode);
+    const items = game.items.get(playerId);
+    if (!items?.delete(itemId)) throw new RoomError('ITEM_NOT_AVAILABLE', '该道具不可用');
+    if (itemId === 'SWAP_GLOVE') this.shuffle(game.hands.get(playerId) ?? []);
+    if (itemId === 'WAX_SEAL') game.protectedPlayerIds.add(playerId);
+    if (itemId === 'POCKET_WATCH' && game.playerIds[game.turnIndex] === playerId) game.turnIndex = (game.turnIndex + 1) % game.playerIds.length;
+    return this.getView(roomCode, playerId);
+  }
+
   challenge(roomCode: string, challengerId: string): GameView {
     const game = this.requireGame(roomCode);
     if (game.phase !== 'CHALLENGE_WINDOW' || game.playerIds[game.turnIndex] !== challengerId || !game.lastPlay) throw new RoomError('CHALLENGE_NOT_ALLOWED', '当前无法发起质疑');
@@ -95,7 +108,8 @@ export class GameService {
     const playerId = game.challengeResult.failedPlayerId;
     game.phase = 'PUNISHMENT';
     const chamber = game.revolver.currentChamber;
-    const hit = game.revolver.bulletPositions.has(chamber) || (game.tavernEvent?.type === 'DOUBLE_DANGER' && game.revolver.bulletPositions.has((chamber + 1) % game.revolver.chamberCount));
+    const wouldHit = game.revolver.bulletPositions.has(chamber) || (game.tavernEvent?.type === 'DOUBLE_DANGER' && game.revolver.bulletPositions.has((chamber + 1) % game.revolver.chamberCount));
+    const hit = wouldHit && !game.protectedPlayerIds.delete(playerId);
     game.revolver.currentChamber = (chamber + 1) % game.revolver.chamberCount;
     game.revolver.shotsTaken += 1;
     game.punishment = { playerId, chamber, hit };
@@ -134,6 +148,7 @@ export class GameService {
       punishment: game.punishment ? { ...game.punishment } : null,
       alivePlayerIds: [...game.alivePlayerIds],
       winnerId: game.winnerId,
+      items: [...(game.items.get(viewerId) ?? [])],
     };
   }
 

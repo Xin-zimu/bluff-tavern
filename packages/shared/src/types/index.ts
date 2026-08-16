@@ -3,6 +3,9 @@ export type RoomStatus = 'LOBBY' | 'STARTING' | 'PLAYING' | 'ROUND_RESULT' | 'GA
 export type PlayerStatus = 'CONNECTED' | 'DISCONNECTED' | 'READY' | 'PLAYING' | 'ELIMINATED' | 'SPECTATING';
 export type GameMode = 'CLASSIC' | 'QUICK' | 'PARTY' | 'CUSTOM';
 export type TavernEventType = 'BLACKOUT' | 'DRUNKEN' | 'RAPID_NIGHT' | 'DOUBLE_DANGER';
+export type CharacterId = 'WOLF' | 'FOX' | 'BEAR' | 'RABBIT' | 'CAT' | 'RACCOON' | 'FROG' | 'PANDA';
+export type ItemId = 'SPYGLASS' | 'SWAP_GLOVE' | 'WAX_SEAL' | 'TAVERN_MUG' | 'POCKET_WATCH';
+export type EmoteId = 'CHEER' | 'SUSPECT' | 'BLUFF' | 'LAUGH' | 'GASP' | 'NERVOUS' | 'TOAST' | 'GOOD_GAME';
 
 export interface RoomSettings {
   maxPlayers: number;
@@ -18,6 +21,7 @@ export interface PlayerView {
   status: PlayerStatus;
   joinedAt: number;
   isConnected: boolean;
+  characterId: CharacterId | null;
 }
 
 export interface RoomView {
@@ -66,6 +70,7 @@ export interface GameView {
   punishment: { playerId: string; chamber: number; hit: boolean } | null;
   alivePlayerIds: string[];
   winnerId: string | null;
+  items: ItemId[];
 }
 
 export interface AckSuccess<T> { ok: true; data: T }

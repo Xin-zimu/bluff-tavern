@@ -8,9 +8,10 @@ interface LobbyProps {
   onSettingsChange: (settings: RoomView['settings']) => void;
   onKick: (playerId: string) => void;
   onStart: () => void;
+  onSelectCharacter: (characterId: NonNullable<RoomView['players'][number]['characterId']>) => void;
 }
 
-export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange, onKick, onStart }: LobbyProps) {
+export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange, onKick, onStart, onSelectCharacter }: LobbyProps) {
   const copyCode = () => void navigator.clipboard?.writeText(room.code);
   const isHost = room.hostPlayerId === playerId;
   const self = room.players.find((player) => player.id === playerId);
@@ -50,6 +51,7 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
           {isHost && player.id !== playerId && <button className="kick-button" onClick={() => onKick(player.id)}>移出</button>}
         </li>)}
       </ul>
+      {self && <div className="character-picker" aria-label="选择原创角色">{(['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA'] as const).map((character) => <button key={character} disabled={room.players.some((player) => player.id !== playerId && player.characterId === character)} className={self.characterId === character ? 'selected' : ''} onClick={() => onSelectCharacter(character)}>{character}</button>)}</div>}
       {self && <button className={`button ${self.status === 'READY' ? 'button--secondary' : 'button--primary'}`} onClick={() => onReady(self.status !== 'READY')}>
         {self.status === 'READY' ? '取消准备' : '准备就绪'}
       </button>}

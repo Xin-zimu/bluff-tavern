@@ -28,6 +28,9 @@ export const playCardsSchema = z.object({
 export const challengeSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
 export const restartGameSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
 export const resumeSessionSchema = z.object({ sessionToken: z.string().min(32).max(256) });
+export const selectCharacterSchema = z.object({ roomCode: roomCodeSchema, characterId: z.enum(['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA']) });
+export const sendEmoteSchema = z.object({ roomCode: roomCodeSchema, emoteId: z.enum(['CHEER', 'SUSPECT', 'BLUFF', 'LAUGH', 'GASP', 'NERVOUS', 'TOAST', 'GOOD_GAME']) });
+export const useItemSchema = z.object({ roomCode: roomCodeSchema, itemId: z.enum(['SPYGLASS', 'SWAP_GLOVE', 'WAX_SEAL', 'TAVERN_MUG', 'POCKET_WATCH']), requestId: requestIdSchema });
 
 export interface ClientToServerEvents {
   'room:create': (payload: z.input<typeof createRoomSchema>, ack: (result: Ack<RoomMembership>) => void) => void;
@@ -41,6 +44,9 @@ export interface ClientToServerEvents {
   'game:challenge': (payload: z.input<typeof challengeSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:restart': (payload: z.input<typeof restartGameSchema>, ack: (result: Ack<GameView>) => void) => void;
   'session:resume': (payload: z.input<typeof resumeSessionSchema>, ack: (result: Ack<RoomMembership>) => void) => void;
+  'room:selectCharacter': (payload: z.input<typeof selectCharacterSchema>, ack: (result: Ack<RoomView>) => void) => void;
+  'game:sendEmote': (payload: z.input<typeof sendEmoteSchema>, ack: (result: Ack<null>) => void) => void;
+  'game:useItem': (payload: z.input<typeof useItemSchema>, ack: (result: Ack<GameView>) => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -58,6 +64,7 @@ export interface ServerToClientEvents {
   'game:punishmentResult': (state: GameView) => void;
   'game:playerEliminated': (event: { playerId: string }) => void;
   'game:over': (state: GameView) => void;
+  'game:emote': (event: { playerId: string; emoteId: z.infer<typeof sendEmoteSchema>['emoteId'] }) => void;
 }
 
 export type InterServerEvents = Record<string, never>;

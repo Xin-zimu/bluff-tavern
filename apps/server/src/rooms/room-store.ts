@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { MAX_PLAYERS, MIN_PLAYERS, type PlayerView, type RoomMembership, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
+import { MAX_PLAYERS, MIN_PLAYERS, type CharacterId, type PlayerView, type RoomMembership, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
 import { createRoomCode, type RandomIndex } from './room-code.js';
 
 interface InternalPlayer extends PlayerView { socketId: string; sessionToken: string }
@@ -43,6 +43,14 @@ export class RoomStore {
     if (room.status !== 'LOBBY') throw new RoomError('ROOM_NOT_READYABLE', '当前房间无法准备');
     const player = room.players.find((candidate) => candidate.id === playerId)!;
     player.status = ready ? 'READY' : 'CONNECTED';
+    return this.getView(code);
+  }
+
+  selectCharacter(code: string, playerId: string, characterId: CharacterId): RoomView {
+    const room = this.requireMember(code, playerId);
+    if (room.status !== 'LOBBY') throw new RoomError('ROOM_NOT_CONFIGURABLE', '牌局已经开始');
+    if (room.players.some((player) => player.id !== playerId && player.characterId === characterId)) throw new RoomError('CHARACTER_TAKEN', '该角色已被其他玩家选择');
+    room.players.find((player) => player.id === playerId)!.characterId = characterId;
     return this.getView(code);
   }
 
@@ -177,11 +185,11 @@ export class RoomStore {
   }
 
   private toPlayerView(player: InternalPlayer): PlayerView {
-    return { id: player.id, nickname: player.nickname, status: player.status, joinedAt: player.joinedAt, isConnected: player.isConnected };
+    return { id: player.id, nickname: player.nickname, status: player.status, joinedAt: player.joinedAt, isConnected: player.isConnected, characterId: player.characterId };
   }
 
   private makePlayer(nickname: string, socketId: string): InternalPlayer {
-    return { id: randomUUID(), nickname, socketId, sessionToken: randomBytes(32).toString('base64url'), status: 'CONNECTED', joinedAt: Date.now(), isConnected: true };
+    return { id: randomUUID(), nickname, socketId, sessionToken: randomBytes(32).toString('base64url'), status: 'CONNECTED', joinedAt: Date.now(), isConnected: true, characterId: null };
   }
 
   private generateUniqueCode(): string {

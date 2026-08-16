@@ -49,4 +49,12 @@ describe('RoomStore', () => {
     expect(resumed.playerId).toBe(guest.playerId);
     expect(resumed.room.players.find((player) => player.id === guest.playerId)?.isConnected).toBe(true);
   });
+
+  it('keeps character selection unique in the lobby', () => {
+    const store = new RoomStore(() => 4);
+    const host = store.create('狼', 'socket-a');
+    const guest = store.join(host.room.code, '狐狸', 'socket-b');
+    expect(store.selectCharacter(host.room.code, host.playerId, 'WOLF').players[0]?.characterId).toBe('WOLF');
+    expect(() => store.selectCharacter(host.room.code, guest.playerId, 'WOLF')).toThrow('该角色已被其他玩家选择');
+  });
 });

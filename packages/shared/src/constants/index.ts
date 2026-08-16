@@ -15,3 +15,6 @@ export const REVOLVER_BULLETS_BY_PLAYER_COUNT = [
   { maxPlayers: 8, bullets: 2 },
 ] as const;
 export const MAX_CARDS_PER_PLAY = 3;
+export const CHARACTER_IDS = ['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA'] as const;
+export const ITEM_IDS = ['SPYGLASS', 'SWAP_GLOVE', 'WAX_SEAL', 'TAVERN_MUG', 'POCKET_WATCH'] as const;
+export const EMOTE_IDS = ['CHEER', 'SUSPECT', 'BLUFF', 'LAUGH', 'GASP', 'NERVOUS', 'TOAST', 'GOOD_GAME'] as const;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CardRank, GameView, RoomView } from '@bluff-tavern/shared';
 import { GameService } from '../src/game/game-service.js';
 
-const room: RoomView = { id: 'room', code: 'ABC234', hostPlayerId: 'p1', status: 'PLAYING', maxPlayers: 4, settings: { maxPlayers: 4, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null }, createdAt: 1, players: ['p1', 'p2', 'p3', 'p4'].map((id, index) => ({ id, nickname: id, status: 'PLAYING', joinedAt: index, isConnected: true })) };
+const room: RoomView = { id: 'room', code: 'ABC234', hostPlayerId: 'p1', status: 'PLAYING', maxPlayers: 4, settings: { maxPlayers: 4, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null }, createdAt: 1, players: ['p1', 'p2', 'p3', 'p4'].map((id, index) => ({ id, nickname: id, status: 'PLAYING', joinedAt: index, isConnected: true, characterId: null })) };
 const game = () => new GameService({ nextInt: () => 0 });
 
 function playCard(service: GameService, predicate: (card: CardRank, state: GameView) => boolean) {
@@ -14,6 +14,12 @@ function playCard(service: GameService, predicate: (card: CardRank, state: GameV
 }
 
 describe('GameService challenges', () => {
+  it('consumes a private item only once', () => {
+    const service = game();
+    const state = service.start(room);
+    expect(service.useItem(room.code, state.turnPlayerId, 'SWAP_GLOVE').items).not.toContain('SWAP_GLOVE');
+    expect(() => service.useItem(room.code, state.turnPlayerId, 'SWAP_GLOVE')).toThrow('该道具不可用');
+  });
   it('freezes Party events and Custom turn duration in the authoritative game state', () => {
     const service = game();
     const party = { ...room, settings: { ...room.settings, gameMode: 'PARTY' as const, eventEnabled: true, turnDurationSeconds: 12 } };
@@ -24,7 +30,7 @@ describe('GameService challenges', () => {
   });
   it.each([2, 3, 4, 5, 6])('deals the configured dynamic deck for %i players', (count) => {
     const service = game();
-    const players = Array.from({ length: count }, (_, index) => ({ id: `p${index + 1}`, nickname: `p${index + 1}`, status: 'PLAYING' as const, joinedAt: index, isConnected: true }));
+    const players = Array.from({ length: count }, (_, index) => ({ id: `p${index + 1}`, nickname: `p${index + 1}`, status: 'PLAYING' as const, joinedAt: index, isConnected: true, characterId: null }));
     const state = service.start({ ...room, players, maxPlayers: count, settings: { maxPlayers: count, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null }, hostPlayerId: 'p1' });
     const totalCards = state.players.reduce((sum, player) => sum + player.cardCount, 0);
     expect(totalCards).toBe(count <= 4 ? 20 : 30);

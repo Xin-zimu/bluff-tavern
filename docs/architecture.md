@@ -59,6 +59,10 @@ React screen
 
 `RoomSettings` 在大厅由房主权限保护，开局时复制到 `InternalGame`。Party（或启用事件的 Custom）会由可注入随机源在每轮选出公开事件：DRUNKEN 仅重排服务器手牌顺序、RAPID_NIGHT 缩短该轮权威时限、DOUBLE_DANGER 令下一次惩罚检查相邻弹巢。Custom 可设定 5–30 秒时限与 1–5 发实弹；客户端只能显示 `GameView.tavernEvent`，不能选择事件或裁决命中。
 
+## V3.5 内容系统
+
+角色选择在大厅由 `RoomStore` 校验唯一性，公开快照仅含 `characterId`。每局游戏为每名玩家建立独立道具 Set，`GameView.items` 只发送 viewer 自己的库存；`game:useItem` 必须带 requestId 并由 `GameService` 消耗。换牌手套在服务器重排该玩家真实手牌、蜡封在服务器抵消下一次命中、怀表推进当前回合。表情是纯公开、受枚举校验的实时事件，不带游戏裁决。
+
 ## 安全与运维边界
 
 输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。V1.0 提供 Nginx 反代与 systemd 服务模板，Node 默认绑定回环地址并由 Nginx 暴露同源网页与 `/socket.io/`。HTTPS、限流、Redis、多实例与持久化仍属后续版本；部署前必须自行配置证书及域名。

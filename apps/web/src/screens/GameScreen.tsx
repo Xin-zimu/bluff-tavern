@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GameView, RoomView } from '@bluff-tavern/shared';
 import { playUiTone } from '../audio/ui-sounds';
 
-export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestart, onFullscreen }: { room: RoomView; game: GameView; playerId: string | null; onPlay: (indexes: number[]) => void; onChallenge: () => void; onRestart: () => void; onFullscreen: () => void }) {
+export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestart, onFullscreen, onUseItem }: { room: RoomView; game: GameView; playerId: string | null; onPlay: (indexes: number[]) => void; onChallenge: () => void; onRestart: () => void; onFullscreen: () => void; onUseItem: (itemId: GameView['items'][number]) => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const isTurn = game.turnPlayerId === playerId && game.phase !== 'ROUND_RESULT' && game.phase !== 'GAME_OVER';
   const players = useMemo(() => {
@@ -21,6 +21,7 @@ export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestar
     </section>
     <section className="hand" aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card ${selected.includes(index) ? 'selected' : ''}`} onClick={() => toggle(index)} disabled={!isTurn}><span>{card === 'JOKER' ? '★' : card}</span></button>)}</section>
     <button className="button button--primary play-button" disabled={!isTurn || selected.length === 0} onClick={play}>出 {selected.length || ''} 张牌</button>
+    {game.items.length > 0 && <div className="item-bar">{game.items.map((item) => <button key={item} className="fullscreen-button" onClick={() => onUseItem(item)}>{item}</button>)}</div>}
     {game.phase === 'CHALLENGE_WINDOW' && isTurn && <button className="button button--secondary play-button" onClick={() => { playUiTone(180); onChallenge(); }}>质疑上一手</button>}
     {game.challengeResult && <p className="future-note">翻牌：{game.challengeResult.revealedCards.join('、')}；{game.challengeResult.wasBluff ? '上一位玩家撒谎' : '质疑失败'}，失败者：{players.find((player) => player.id === game.challengeResult?.failedPlayerId)?.nickname}</p>}
     {game.punishment && <p className="future-note">轮盘第 {game.punishment.chamber + 1} 弹巢：{game.punishment.hit ? '中弹淘汰' : '空枪，继续游戏'}。</p>}

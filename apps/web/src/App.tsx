@@ -104,6 +104,14 @@ export function App() {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
+  const selectCharacter = (characterId: NonNullable<NonNullable<typeof state.room>['players'][number]['characterId']>) => {
+    if (!state.room) return;
+    socket.emit('room:selectCharacter', { roomCode: state.room.code, characterId }, (result) => { if (!result.ok) state.setNotice(result.error.message); });
+  };
+  const useItem = (itemId: NonNullable<typeof state.game>['items'][number]) => {
+    if (!state.room) return;
+    socket.emit('game:useItem', { roomCode: state.room.code, itemId, requestId: crypto.randomUUID() }, (result) => { if (result.ok) setGame(result.data); else state.setNotice(result.error.message); });
+  };
   const fullscreen = () => {
     if (!document.fullscreenElement) void document.documentElement.requestFullscreen().catch(() => state.setNotice('当前浏览器无法进入全屏'));
     else void document.exitFullscreen();
@@ -113,8 +121,8 @@ export function App() {
   return <div className={`app-shell${lowPerformance ? ' app-shell--low-power' : ''}`}>
     <ConnectionBadge status={state.connection} networkOnline={state.networkOnline} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
-    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} />
-      : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} />
+    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} onUseItem={useItem} />
+      : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
     <footer>V1.0 · 原创占位视觉 · 不含原游戏版权资产</footer>
   </div>;

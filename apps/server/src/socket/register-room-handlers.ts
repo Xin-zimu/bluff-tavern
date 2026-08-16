@@ -1,5 +1,5 @@
 import type { Server, Socket } from 'socket.io';
-import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, challengeSchema, restartGameSchema, resumeSessionSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
+import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, challengeSchema, restartGameSchema, resumeSessionSchema, selectCharacterSchema, sendEmoteSchema, useItemSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
 import { GameService } from '../game/game-service.js';
 import { RoomError, RoomStore } from '../rooms/room-store.js';
 
@@ -66,6 +66,27 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       io.to(room.code).emit('room:state', room);
       ack(result);
     } catch (error) { ack(failure(error)); }
+  });
+
+  socket.on('room:selectCharacter', (payload, ack) => {
+    const parsed = selectCharacterSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    try { const room = rooms.selectCharacter(parsed.data.roomCode, socket.data.playerId!, parsed.data.characterId); io.to(room.code).emit('room:state', room); ack({ ok: true, data: room }); } catch (error) { ack(failure(error)); }
+  });
+
+  socket.on('game:sendEmote', (payload, ack) => {
+    const parsed = sendEmoteSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    io.to(parsed.data.roomCode).emit('game:emote', { playerId: socket.data.playerId!, emoteId: parsed.data.emoteId });
+    ack({ ok: true, data: null });
+  });
+
+  socket.on('game:useItem', (payload, ack) => {
+    const parsed = useItemSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    const cached = processedGameRequests.get(parsed.data.requestId);
+    if (cached) return ack(cached);
+    try { const state = games.useItem(parsed.data.roomCode, socket.data.playerId!, parsed.data.itemId); const result = { ok: true as const, data: state }; processedGameRequests.set(parsed.data.requestId, result); broadcastGameState(io, rooms, games, parsed.data.roomCode); ack(result); } catch (error) { ack(failure(error)); }
   });
 
   socket.on('room:updateSettings', (payload, ack) => {

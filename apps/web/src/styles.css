@@ -55,6 +55,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .settings-control { display: flex; justify-content: space-between; align-items: center; margin: 16px 0; color: #c8b9a1; }
 .settings-control select { min-height: 38px; border: 1px solid #6e625b; color: #f2c777; background: #120d0b; padding: 0 10px; }
 .kick-button { margin-left: auto; min-height: 34px; color: #d8aaa1; border: 1px solid #7a2632; background: transparent; border-radius: 3px; cursor: pointer; }
+.character-picker, .item-bar { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:14px 0; }.character-picker button { min-height:38px; border:1px solid #6e625b; color:#e8ddc8; background:#2b1914; border-radius:4px; }.character-picker .selected { border-color:#d4a85d; color:#f2c777; }
 .future-note { color: #756960; font-size: .75rem; text-align: center; margin-bottom: 0; }
 @media (max-width: 720px) {
   .app-shell { padding-top: max(56px, env(safe-area-inset-top)); }
