@@ -21,6 +21,7 @@ export const playCardsSchema = z.object({
   cardIndexes: z.array(z.number().int().nonnegative()).min(1).max(MAX_CARDS_PER_PLAY),
   requestId: requestIdSchema,
 }).refine((value) => new Set(value.cardIndexes).size === value.cardIndexes.length, { message: 'Card indexes must be unique' });
+export const challengeSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
 
 export interface ClientToServerEvents {
   'room:create': (payload: z.input<typeof createRoomSchema>, ack: (result: Ack<RoomMembership>) => void) => void;
@@ -31,6 +32,7 @@ export interface ClientToServerEvents {
   'room:kick': (payload: z.input<typeof kickPlayerSchema>, ack: (result: Ack<RoomView>) => void) => void;
   'game:start': (payload: z.input<typeof startGameSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:playCards': (payload: z.input<typeof playCardsSchema>, ack: (result: Ack<GameView>) => void) => void;
+  'game:challenge': (payload: z.input<typeof challengeSchema>, ack: (result: Ack<GameView>) => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -42,6 +44,8 @@ export interface ServerToClientEvents {
   'game:state': (state: GameView) => void;
   'game:turnStarted': (state: GameView) => void;
   'game:cardsPlayed': (event: { playerId: string; count: number; roundNumber: number }) => void;
+  'game:challengeStarted': (event: { challengerId: string; challengedPlayerId: string }) => void;
+  'game:challengeResult': (state: GameView) => void;
 }
 
 export type InterServerEvents = Record<string, never>;

@@ -1,5 +1,5 @@
 import type { Server, Socket } from 'socket.io';
-import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
+import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, challengeSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
 import { GameService } from '../game/game-service.js';
 import { RoomError, RoomStore } from '../rooms/room-store.js';
 
@@ -134,6 +134,24 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       io.to(parsed.data.roomCode).emit('game:cardsPlayed', { playerId: socket.data.playerId!, count: result.playedCount, roundNumber: result.state.roundNumber });
       broadcastGameState(io, rooms, games, parsed.data.roomCode);
       ack(ackResult);
+    } catch (error) { ack(failure(error)); }
+  });
+
+  socket.on('game:challenge', (payload, ack) => {
+    const parsed = challengeSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    const cached = processedGameRequests.get(parsed.data.requestId);
+    if (cached) return ack(cached);
+    try {
+      const state = games.challenge(parsed.data.roomCode, socket.data.playerId!);
+      const result = { ok: true as const, data: state };
+      processedGameRequests.set(parsed.data.requestId, result);
+      if (!state.lastPlay || !state.challengeResult) throw new Error('Missing challenge result');
+      logger.info({ event: 'challenge', roomCode: parsed.data.roomCode, challengerId: socket.data.playerId, failedPlayerId: state.challengeResult.failedPlayerId });
+      io.to(parsed.data.roomCode).emit('game:challengeStarted', { challengerId: socket.data.playerId!, challengedPlayerId: state.lastPlay.playerId });
+      broadcastGameState(io, rooms, games, parsed.data.roomCode);
+      io.to(parsed.data.roomCode).emit('game:challengeResult', state);
+      ack(result);
     } catch (error) { ack(failure(error)); }
   });
 

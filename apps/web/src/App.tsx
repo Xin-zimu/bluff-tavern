@@ -70,11 +70,17 @@ export function App() {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
+  const challenge = () => {
+    if (!state.room) return;
+    socket.emit('game:challenge', { roomCode: state.room.code, requestId: crypto.randomUUID() }, (result) => {
+      if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
+    });
+  };
 
   return <div className="app-shell">
     <ConnectionBadge status={state.connection} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
-    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} />
+    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onMaxPlayersChange={updateMaxPlayers} onKick={kickPlayer} onStart={startGame} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
     <footer>V0.3 · 原创占位视觉 · 不含原游戏版权资产</footer>

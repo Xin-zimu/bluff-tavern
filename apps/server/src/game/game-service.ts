@@ -1,4 +1,4 @@
-import { CARDS_PER_RANK_BY_PLAYER_COUNT, type CardRank, type GameView, type RoomView } from '@bluff-tavern/shared';
+import { CARDS_PER_RANK_BY_PLAYER_COUNT, type CardRank, type GamePhase, type GameView, type RoomView } from '@bluff-tavern/shared';
 import { RoomError } from '../rooms/room-store.js';
 import type { RandomService } from './random.js';
 
@@ -10,6 +10,9 @@ interface InternalGame {
   targetCard: 'A' | 'K' | 'Q';
   turnIndex: number;
   discardCount: number;
+  phase: GamePhase;
+  lastPlay: { playerId: string; cards: CardRank[] } | null;
+  challengeResult: GameView['challengeResult'];
 }
 
 const targets = ['A', 'K', 'Q'] as const;
@@ -27,6 +30,7 @@ export class GameService {
       targetCard: 'A',
       turnIndex: 0,
       discardCount: 0,
+      phase: 'TURN', lastPlay: null, challengeResult: null,
     };
     this.dealRound(game);
     this.games.set(room.code, game);
@@ -35,23 +39,35 @@ export class GameService {
 
   playCards(roomCode: string, playerId: string, cardIndexes: number[]): { state: GameView; playedCount: number; roundAdvanced: boolean } {
     const game = this.requireGame(roomCode);
-    if (game.playerIds[game.turnIndex] !== playerId) throw new RoomError('NOT_YOUR_TURN', '现在不是你的回合');
+    if ((game.phase !== 'TURN' && game.phase !== 'CHALLENGE_WINDOW') || game.playerIds[game.turnIndex] !== playerId) throw new RoomError('NOT_YOUR_TURN', '现在不是你的回合');
     const hand = game.hands.get(playerId);
     if (!hand) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
     if (cardIndexes.some((index) => index >= hand.length)) throw new RoomError('INVALID_CARD_INDEX', '选择了不存在的手牌');
     const sorted = [...cardIndexes].sort((a, b) => b - a);
+    const cards = sorted.map((index) => hand[index]!);
     sorted.forEach((index) => hand.splice(index, 1));
     game.discardCount += cardIndexes.length;
-    let roundAdvanced = false;
-    if ([...game.hands.values()].every((cards) => cards.length === 0)) {
-      game.roundNumber += 1;
-      this.dealRound(game);
-      roundAdvanced = true;
-    } else {
-      game.turnIndex = (game.turnIndex + 1) % game.playerIds.length;
-      this.skipEmptyHands(game);
-    }
-    return { state: this.getView(roomCode, playerId), playedCount: cardIndexes.length, roundAdvanced };
+    game.lastPlay = { playerId, cards };
+    game.challengeResult = null;
+    game.turnIndex = (game.turnIndex + 1) % game.playerIds.length;
+    if ([...game.hands.values()].some((remaining) => remaining.length > 0)) this.skipEmptyHands(game);
+    game.phase = 'CHALLENGE_WINDOW';
+    return { state: this.getView(roomCode, playerId), playedCount: cardIndexes.length, roundAdvanced: false };
+  }
+
+  challenge(roomCode: string, challengerId: string): GameView {
+    const game = this.requireGame(roomCode);
+    if (game.phase !== 'CHALLENGE_WINDOW' || game.playerIds[game.turnIndex] !== challengerId || !game.lastPlay) throw new RoomError('CHALLENGE_NOT_ALLOWED', '当前无法发起质疑');
+    game.phase = 'REVEAL';
+    const wasBluff = game.lastPlay.cards.some((card) => card !== game.targetCard && card !== 'JOKER');
+    game.challengeResult = {
+      challengerId,
+      failedPlayerId: wasBluff ? game.lastPlay.playerId : challengerId,
+      wasBluff,
+      revealedCards: [...game.lastPlay.cards],
+    };
+    game.phase = 'ROUND_RESULT';
+    return this.getView(roomCode, challengerId);
   }
 
   getView(roomCode: string, viewerId: string): GameView {
@@ -60,12 +76,14 @@ export class GameService {
     if (!hand) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
     return {
       roundNumber: game.roundNumber,
-      phase: 'TURN',
+      phase: game.phase,
       targetCard: game.targetCard,
       turnPlayerId: game.playerIds[game.turnIndex]!,
       discardCount: game.discardCount,
       players: game.playerIds.map((playerId) => ({ playerId, cardCount: game.hands.get(playerId)!.length })),
       hand: [...hand],
+      lastPlay: game.lastPlay ? { playerId: game.lastPlay.playerId, count: game.lastPlay.cards.length } : null,
+      challengeResult: game.challengeResult ? { ...game.challengeResult, revealedCards: [...game.challengeResult.revealedCards] } : null,
     };
   }
 
@@ -87,6 +105,9 @@ export class GameService {
     game.targetCard = targets[this.random.nextInt(targets.length)]!;
     game.turnIndex = this.random.nextInt(game.playerIds.length);
     game.discardCount = 0;
+    game.phase = 'TURN';
+    game.lastPlay = null;
+    game.challengeResult = null;
   }
 
   private shuffle(deck: CardRank[]): void {

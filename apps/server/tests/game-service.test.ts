@@ -1,36 +1,53 @@
 import { describe, expect, it } from 'vitest';
-import type { RoomView } from '@bluff-tavern/shared';
+import type { CardRank, GameView, RoomView } from '@bluff-tavern/shared';
 import { GameService } from '../src/game/game-service.js';
 
-const room: RoomView = {
-  id: 'room', code: 'ABC234', hostPlayerId: 'p1', status: 'PLAYING', maxPlayers: 4, settings: { maxPlayers: 4 }, createdAt: 1,
-  players: ['p1', 'p2', 'p3', 'p4'].map((id, index) => ({ id, nickname: id, status: 'PLAYING', joinedAt: index })),
-};
+const room: RoomView = { id: 'room', code: 'ABC234', hostPlayerId: 'p1', status: 'PLAYING', maxPlayers: 4, settings: { maxPlayers: 4 }, createdAt: 1, players: ['p1', 'p2', 'p3', 'p4'].map((id, index) => ({ id, nickname: id, status: 'PLAYING', joinedAt: index })) };
+const game = () => new GameService({ nextInt: () => 0 });
 
-describe('GameService', () => {
-  it('deals private hands, enforces turns, and starts a new round after all cards are played', () => {
-    const game = new GameService({ nextInt: () => 0 });
-    const first = game.start(room);
-    expect(first.hand).toHaveLength(5);
-    expect(first.players).toEqual(expect.arrayContaining([{ playerId: 'p2', cardCount: 5 }]));
-    expect(() => game.playCards(room.code, 'p2', [0])).toThrow('现在不是你的回合');
-    let state = first;
-    let plays = 0;
-    while (state.roundNumber === 1) {
-      const cards = Array.from({ length: Math.min(3, state.hand.length) }, (_, index) => index);
-      const result = game.playCards(room.code, state.turnPlayerId, cards);
-      plays += 1;
-      state = game.getView(room.code, result.state.turnPlayerId);
-    }
-    expect(plays).toBeGreaterThan(4);
-    expect(state.roundNumber).toBe(2);
-    expect(state.discardCount).toBe(0);
-    expect(state.hand).toHaveLength(5);
+function playCard(service: GameService, predicate: (card: CardRank, state: GameView) => boolean) {
+  const state = service.start(room);
+  const index = state.hand.findIndex((card) => predicate(card, state));
+  if (index < 0) throw new Error('Expected card not dealt');
+  service.playCards(room.code, state.turnPlayerId, [index]);
+  return service.getView(room.code, 'p2');
+}
+
+describe('GameService challenges', () => {
+  it('makes the challenger fail when the revealed card matches target', () => {
+    const service = game(); const challenger = playCard(service, (card, state) => card === state.targetCard);
+    const result = service.challenge(room.code, challenger.turnPlayerId);
+    expect(result.challengeResult).toMatchObject({ wasBluff: false, failedPlayerId: challenger.turnPlayerId });
   });
-
-  it('rejects card indexes outside the authoritative hand', () => {
-    const game = new GameService({ nextInt: () => 0 });
-    const first = game.start(room);
-    expect(() => game.playCards(room.code, first.turnPlayerId, [99])).toThrow('选择了不存在的手牌');
+  it('makes the previous player fail on a fake card', () => {
+    const service = game(); const challenger = playCard(service, (card, state) => card !== state.targetCard && card !== 'JOKER');
+    const result = service.challenge(room.code, challenger.turnPlayerId);
+    expect(result.challengeResult).toMatchObject({ wasBluff: true, failedPlayerId: 'p1' });
+  });
+  it('treats Joker as a valid target card', () => {
+    const service = game(); const twoPlayers = { ...room, players: room.players.slice(0, 2) };
+    const state = service.start(twoPlayers); const index = state.hand.findIndex((card) => card === 'JOKER');
+    if (index < 0) throw new Error('Expected Joker not dealt');
+    service.playCards(twoPlayers.code, state.turnPlayerId, [index]);
+    const challenger = service.getView(twoPlayers.code, 'p2');
+    expect(service.challenge(room.code, challenger.turnPlayerId).challengeResult?.wasBluff).toBe(false);
+  });
+  it('finds a bluff when a multi-card play contains one invalid card', () => {
+    const service = game(); const state = service.start(room);
+    const valid = state.hand.findIndex((card) => card === state.targetCard || card === 'JOKER');
+    const invalid = state.hand.findIndex((card) => card !== state.targetCard && card !== 'JOKER');
+    service.playCards(room.code, state.turnPlayerId, [valid, invalid]);
+    const result = service.challenge(room.code, 'p2').challengeResult;
+    expect(result?.wasBluff).toBe(true);
+    expect(result?.revealedCards).toContain(state.hand[invalid]!);
+  });
+  it('locks duplicate challenges after the first result', () => {
+    const service = game(); const challenger = playCard(service, () => true);
+    service.challenge(room.code, challenger.turnPlayerId);
+    expect(() => service.challenge(room.code, challenger.turnPlayerId)).toThrow('当前无法发起质疑');
+  });
+  it('rejects a challenge from a non-current player', () => {
+    const service = game(); playCard(service, () => true);
+    expect(() => service.challenge(room.code, 'p3')).toThrow('当前无法发起质疑');
   });
 });

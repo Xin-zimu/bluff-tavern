@@ -25,6 +25,7 @@ React screen
 - `rooms/room-store.ts`：房间聚合根，负责容量、昵称冲突、创建者、准备状态、房主授权、踢人与生命周期。
 - `socket/`：解析客户端意图、更新 socket membership、广播公开快照。
 - `game/GameService`：独立服务端牌局状态机；游戏真实手牌从不进入 `RoomView`，按 viewer 生成 `GameView`。
+- `GameService` 在 V0.4 保存上一手真实出牌，仅在质疑结果时公开；`CHALLENGE_WINDOW` 和 `ROUND_RESULT` 阻止重复或并发判定。
 - 未来的 `game/`、`auth/`、`persistence/` 目录在需要时添加，避免空抽象。
 
 ## 后续扩展点
