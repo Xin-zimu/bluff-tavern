@@ -13,6 +13,10 @@ interface InternalGame {
   phase: GamePhase;
   lastPlay: { playerId: string; cards: CardRank[] } | null;
   challengeResult: GameView['challengeResult'];
+  punishment: GameView['punishment'];
+  alivePlayerIds: Set<string>;
+  winnerId: string | null;
+  revolver: { chamberCount: number; bulletPositions: Set<number>; currentChamber: number; shotsTaken: number };
 }
 
 const targets = ['A', 'K', 'Q'] as const;
@@ -31,6 +35,8 @@ export class GameService {
       turnIndex: 0,
       discardCount: 0,
       phase: 'TURN', lastPlay: null, challengeResult: null,
+      punishment: null, alivePlayerIds: new Set(room.players.map((player) => player.id)), winnerId: null,
+      revolver: this.createRevolver(),
     };
     this.dealRound(game);
     this.games.set(room.code, game);
@@ -70,20 +76,48 @@ export class GameService {
     return this.getView(roomCode, challengerId);
   }
 
+  punish(roomCode: string): { state: GameView; playerId: string; hit: boolean; gameOver: boolean } {
+    const game = this.requireGame(roomCode);
+    if (game.phase !== 'ROUND_RESULT' || !game.challengeResult) throw new RoomError('PUNISHMENT_NOT_ALLOWED', '当前无法执行惩罚');
+    const playerId = game.challengeResult.failedPlayerId;
+    game.phase = 'PUNISHMENT';
+    const chamber = game.revolver.currentChamber;
+    const hit = game.revolver.bulletPositions.has(chamber);
+    game.revolver.currentChamber = (chamber + 1) % game.revolver.chamberCount;
+    game.revolver.shotsTaken += 1;
+    game.punishment = { playerId, chamber, hit };
+    if (hit) game.alivePlayerIds.delete(playerId);
+    if (game.alivePlayerIds.size === 1) {
+      game.winnerId = [...game.alivePlayerIds][0]!;
+      game.phase = 'GAME_OVER';
+      return { state: this.getView(roomCode, playerId), playerId, hit, gameOver: true };
+    }
+    game.roundNumber += 1;
+    this.dealRound(game);
+    game.punishment = { playerId, chamber, hit };
+    return { state: this.getView(roomCode, playerId), playerId, hit, gameOver: false };
+  }
+
+  restart(room: RoomView): GameView {
+    return this.start(room);
+  }
+
   getView(roomCode: string, viewerId: string): GameView {
     const game = this.requireGame(roomCode);
-    const hand = game.hands.get(viewerId);
-    if (!hand) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
+    const hand = game.hands.get(viewerId) ?? [];
     return {
       roundNumber: game.roundNumber,
       phase: game.phase,
       targetCard: game.targetCard,
       turnPlayerId: game.playerIds[game.turnIndex]!,
       discardCount: game.discardCount,
-      players: game.playerIds.map((playerId) => ({ playerId, cardCount: game.hands.get(playerId)!.length })),
+      players: game.playerIds.map((playerId) => ({ playerId, cardCount: game.hands.get(playerId)?.length ?? 0 })),
       hand: [...hand],
       lastPlay: game.lastPlay ? { playerId: game.lastPlay.playerId, count: game.lastPlay.cards.length } : null,
       challengeResult: game.challengeResult ? { ...game.challengeResult, revealedCards: [...game.challengeResult.revealedCards] } : null,
+      punishment: game.punishment ? { ...game.punishment } : null,
+      alivePlayerIds: [...game.alivePlayerIds],
+      winnerId: game.winnerId,
     };
   }
 
@@ -93,7 +127,8 @@ export class GameService {
   }
 
   private dealRound(game: InternalGame): void {
-    const configuration = CARDS_PER_RANK_BY_PLAYER_COUNT.find((entry) => game.playerIds.length <= entry.maxPlayers);
+    const activePlayers = game.playerIds.filter((playerId) => game.alivePlayerIds.has(playerId));
+    const configuration = CARDS_PER_RANK_BY_PLAYER_COUNT.find((entry) => activePlayers.length <= entry.maxPlayers);
     if (!configuration) throw new Error('Missing deck configuration');
     const deck: CardRank[] = [
       ...(['A', 'K', 'Q'] as const).flatMap((rank) => Array<CardRank>(configuration.copiesPerRank).fill(rank)),
@@ -101,13 +136,14 @@ export class GameService {
     ];
     this.shuffle(deck);
     game.hands = new Map(game.playerIds.map((playerId) => [playerId, []]));
-    deck.forEach((card, index) => game.hands.get(game.playerIds[index % game.playerIds.length]!)!.push(card));
+    deck.forEach((card, index) => game.hands.get(activePlayers[index % activePlayers.length]!)!.push(card));
     game.targetCard = targets[this.random.nextInt(targets.length)]!;
-    game.turnIndex = this.random.nextInt(game.playerIds.length);
+    game.turnIndex = game.playerIds.indexOf(activePlayers[this.random.nextInt(activePlayers.length)]!);
     game.discardCount = 0;
     game.phase = 'TURN';
     game.lastPlay = null;
     game.challengeResult = null;
+    game.punishment = null;
   }
 
   private shuffle(deck: CardRank[]): void {
@@ -118,7 +154,7 @@ export class GameService {
   }
 
   private skipEmptyHands(game: InternalGame): void {
-    while (game.hands.get(game.playerIds[game.turnIndex]!)!.length === 0) {
+    while (!game.alivePlayerIds.has(game.playerIds[game.turnIndex]!) || game.hands.get(game.playerIds[game.turnIndex]!)!.length === 0) {
       game.turnIndex = (game.turnIndex + 1) % game.playerIds.length;
     }
   }
@@ -127,5 +163,10 @@ export class GameService {
     const game = this.games.get(roomCode);
     if (!game) throw new RoomError('GAME_NOT_FOUND', '牌局尚未开始');
     return game;
+  }
+
+  private createRevolver() {
+    const chamberCount = 6;
+    return { chamberCount, bulletPositions: new Set([this.random.nextInt(chamberCount)]), currentChamber: 0, shotsTaken: 0 };
   }
 }

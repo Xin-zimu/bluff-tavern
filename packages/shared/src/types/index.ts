@@ -35,7 +35,7 @@ export interface RoomPlayerEvent {
 }
 
 export type CardRank = 'A' | 'K' | 'Q' | 'JOKER';
-export type GamePhase = 'TURN' | 'CHALLENGE_WINDOW' | 'REVEAL' | 'ROUND_RESULT';
+export type GamePhase = 'TURN' | 'CHALLENGE_WINDOW' | 'REVEAL' | 'PUNISHMENT' | 'ROUND_RESULT' | 'GAME_OVER';
 
 export interface GamePlayerView {
   playerId: string;
@@ -52,6 +52,9 @@ export interface GameView {
   hand: CardRank[];
   lastPlay: { playerId: string; count: number } | null;
   challengeResult: { challengerId: string; failedPlayerId: string; wasBluff: boolean; revealedCards: CardRank[] } | null;
+  punishment: { playerId: string; chamber: number; hit: boolean } | null;
+  alivePlayerIds: string[];
+  winnerId: string | null;
 }
 
 export interface AckSuccess<T> { ok: true; data: T }

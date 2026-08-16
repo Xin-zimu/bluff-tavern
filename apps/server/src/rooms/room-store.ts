@@ -80,6 +80,28 @@ export class RoomStore {
     return this.getView(code);
   }
 
+  eliminatePlayer(code: string, playerId: string): RoomView {
+    const room = this.requireMember(code, playerId);
+    const player = room.players.find((candidate) => candidate.id === playerId)!;
+    player.status = 'ELIMINATED';
+    return this.getView(code);
+  }
+
+  finishGame(code: string): RoomView {
+    const room = this.requireRoom(code);
+    room.status = 'GAME_OVER';
+    return this.getView(code);
+  }
+
+  restartGame(code: string, hostPlayerId: string): RoomView {
+    const room = this.requireMember(code, hostPlayerId);
+    this.requireHost(room, hostPlayerId);
+    if (room.status !== 'GAME_OVER') throw new RoomError('GAME_NOT_OVER', '当前牌局尚未结束');
+    room.status = 'PLAYING';
+    room.players.forEach((player) => { player.status = 'PLAYING'; });
+    return this.getView(code);
+  }
+
   leaveBySocket(socketId: string): Departure | null {
     for (const [code, room] of this.rooms) {
       const index = room.players.findIndex((player) => player.socketId === socketId);

@@ -1,5 +1,5 @@
 import type { Server, Socket } from 'socket.io';
-import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, challengeSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
+import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, challengeSchema, restartGameSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
 import { GameService } from '../game/game-service.js';
 import { RoomError, RoomStore } from '../rooms/room-store.js';
 
@@ -144,13 +144,42 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     if (cached) return ack(cached);
     try {
       const state = games.challenge(parsed.data.roomCode, socket.data.playerId!);
-      const result = { ok: true as const, data: state };
+      const punishment = games.punish(parsed.data.roomCode);
+      const result = { ok: true as const, data: punishment.state };
       processedGameRequests.set(parsed.data.requestId, result);
       if (!state.lastPlay || !state.challengeResult) throw new Error('Missing challenge result');
       logger.info({ event: 'challenge', roomCode: parsed.data.roomCode, challengerId: socket.data.playerId, failedPlayerId: state.challengeResult.failedPlayerId });
       io.to(parsed.data.roomCode).emit('game:challengeStarted', { challengerId: socket.data.playerId!, challengedPlayerId: state.lastPlay.playerId });
-      broadcastGameState(io, rooms, games, parsed.data.roomCode);
       io.to(parsed.data.roomCode).emit('game:challengeResult', state);
+      io.to(parsed.data.roomCode).emit('game:punishmentStarted', { playerId: punishment.playerId, chamber: punishment.state.punishment?.chamber ?? 0 });
+      if (punishment.hit) {
+        const room = rooms.eliminatePlayer(parsed.data.roomCode, punishment.playerId);
+        io.to(room.code).emit('room:state', room);
+        io.to(room.code).emit('game:playerEliminated', { playerId: punishment.playerId });
+      }
+      if (punishment.gameOver) {
+        const room = rooms.finishGame(parsed.data.roomCode);
+        io.to(room.code).emit('room:state', room);
+        io.to(room.code).emit('game:over', punishment.state);
+      }
+      broadcastGameState(io, rooms, games, parsed.data.roomCode);
+      io.to(parsed.data.roomCode).emit('game:punishmentResult', punishment.state);
+      ack(result);
+    } catch (error) { ack(failure(error)); }
+  });
+
+  socket.on('game:restart', (payload, ack) => {
+    const parsed = restartGameSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    const cached = processedGameRequests.get(parsed.data.requestId);
+    if (cached) return ack(cached);
+    try {
+      const room = rooms.restartGame(parsed.data.roomCode, socket.data.playerId!);
+      const state = games.restart(room);
+      const result = { ok: true as const, data: state };
+      processedGameRequests.set(parsed.data.requestId, result);
+      io.to(room.code).emit('room:state', room);
+      broadcastGameState(io, rooms, games, room.code);
       ack(result);
     } catch (error) { ack(failure(error)); }
   });

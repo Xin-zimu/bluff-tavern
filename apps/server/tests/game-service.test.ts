@@ -50,4 +50,29 @@ describe('GameService challenges', () => {
     const service = game(); playCard(service, () => true);
     expect(() => service.challenge(room.code, 'p3')).toThrow('当前无法发起质疑');
   });
+
+  it('resolves an empty chamber and starts the next round', () => {
+    const service = new GameService({ nextInt: (max) => max === 6 ? 1 : 0 });
+    const twoPlayers = { ...room, players: room.players.slice(0, 2) };
+    const state = service.start(twoPlayers);
+    service.playCards(twoPlayers.code, state.turnPlayerId, [0]);
+    service.challenge(twoPlayers.code, 'p2');
+    const punishment = service.punish(twoPlayers.code);
+    expect(punishment).toMatchObject({ hit: false, gameOver: false });
+    expect(punishment.state.roundNumber).toBe(2);
+    expect(punishment.state.alivePlayerIds).toEqual(['p1', 'p2']);
+  });
+
+  it('eliminates a player on a live bullet and declares the final survivor', () => {
+    const service = new GameService({ nextInt: () => 0 });
+    const twoPlayers = { ...room, players: room.players.slice(0, 2) };
+    const state = service.start(twoPlayers);
+    service.playCards(twoPlayers.code, state.turnPlayerId, [0]);
+    service.challenge(twoPlayers.code, 'p2');
+    const punishment = service.punish(twoPlayers.code);
+    expect(punishment).toMatchObject({ hit: true, gameOver: true });
+    expect(punishment.state.phase).toBe('GAME_OVER');
+    expect(punishment.state.alivePlayerIds).toHaveLength(1);
+    expect(punishment.state.winnerId).not.toBe(punishment.playerId);
+  });
 });
