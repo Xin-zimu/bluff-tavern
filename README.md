@@ -1,6 +1,6 @@
 # 诡牌酒馆 / Bluff Tavern
 
-手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V1.0 可玩 MVP**：支持 2–4 人服务器权威牌局、质疑、轮盘惩罚、淘汰、胜负、再来一局和基础断线恢复。
+手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V1.5 手机体验版**：支持 2–4 人服务器权威牌局、基础断线恢复、PWA 安装与移动端全屏游玩。
 
 ## 技术栈
 
@@ -20,6 +20,8 @@ pnpm dev
 ```
 
 打开 `http://localhost:5173`。服务端默认监听 `127.0.0.1:3001`，健康检查为 `http://127.0.0.1:3001/health`。默认 Socket 地址为网页同源的 `/socket.io/`：Vite 开发服务器会反代到 3001，生产环境应由 Nginx 做同样的反代，因此无需暴露 Node 端口。临时直连时可设置 `VITE_SERVER_URL`；外部设备开发调试时设置 `WEB_HOST=0.0.0.0` 与 `HOST=0.0.0.0`。不要将开发端口长期直接暴露公网。
+
+生产构建会注册 PWA Service Worker。Android Chrome 可通过浏览器的“安装应用”入口安装；iPhone Safari 可用分享菜单的“添加到主屏幕”。游戏牌桌提供全屏按钮，竖屏手机会提示横屏；低性能设备会自动关闭非必要动画。
 
 ## 质量命令
 
@@ -47,7 +49,7 @@ docs/                     架构、协议与验收记录
 ## 当前边界
 
 - 状态仅在内存中；服务重启会清空房间。
-- 牌局或结算阶段的意外断线会保留座位；浏览器用本地 `sessionToken` 在重新打开后恢复同一玩家身份。Token 只存浏览器本机、不写日志、不会出现在公开房间状态中。断线宽限、后台恢复、网络提示和 PWA 属 V1.5。
+- 牌局或结算阶段的意外断线会保留座位；浏览器用本地 `sessionToken` 在重新打开、网络恢复或从后台回到前台后恢复同一玩家身份。Token 只存浏览器本机、不写日志、不会出现在公开房间状态中。
 - 房主离开后会转移给最早入席的剩余玩家；修改最大人数会取消所有人的准备状态。
 - 内存状态在服务器重启后仍会清空；观战、聊天、数据库和多实例扩展尚未实现。
 
@@ -55,4 +57,4 @@ docs/                     架构、协议与验收记录
 
 V1.0 提供最小 Nginx 与 systemd 模板：[`deploy/nginx/bluff-tavern.conf`](deploy/nginx/bluff-tavern.conf)、[`deploy/systemd/bluff-tavern.service`](deploy/systemd/bluff-tavern.service) 和 [`scripts/build-release.sh`](scripts/build-release.sh)。部署前必须替换示例域名并配置 HTTPS；具体步骤见 [`docs/deployment.md`](docs/deployment.md)。
 
-详见 [`docs/architecture.md`](docs/architecture.md)、[`docs/protocol.md`](docs/protocol.md) 与 [`docs/V1.0-acceptance.md`](docs/V1.0-acceptance.md)。
+详见 [`docs/architecture.md`](docs/architecture.md)、[`docs/protocol.md`](docs/protocol.md) 与 [`docs/V1.5-acceptance.md`](docs/V1.5-acceptance.md)。

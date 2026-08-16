@@ -39,7 +39,13 @@ React screen
 
 ## 响应式与美术
 
-布局以 320px 起步，桌面使用双列，窄屏改为单列，并处理 `env(safe-area-inset-*)`、横屏低高度和 reduced-motion。色彩取自 `ART_ASSETS_PLAN.md`；当前所有视觉均为原创 CSS 占位，正式资源统一进入根 `assets/`，优化后复制/构建到 Web public 资源。
+布局以 320px 起步，桌面使用双列，窄屏改为单列，并处理 `env(safe-area-inset-*)`、横屏低高度和 reduced-motion。V1.5 在竖屏显示横屏提示，牌桌提供标准 Fullscreen API 入口；触摸卡牌使用 `touch-action: manipulation`、禁用文字选择和 tap highlight 以降低误触。色彩取自 `ART_ASSETS_PLAN.md`；当前所有视觉均为原创 CSS/SVG 占位，正式资源统一进入根 `assets/`，优化后复制/构建到 Web public 资源。
+
+## PWA 与恢复
+
+`manifest.webmanifest` 声明 standalone 应用，原创 SVG 酒馆卡牌图标位于 `apps/web/public/icons/`。生产构建注册最小同源 Service Worker：安装时缓存应用壳，访问过的同源 GET 资源会写入同一缓存；Socket.IO 不会被缓存。Socket.IO 使用有限退避的自动重连，`connect`、浏览器 online 和页面恢复可调用 `session:resume`，因此新 socket 会重新绑定服务端原玩家座位。`navigator.onLine` 与 Socket 状态分别呈现，避免把“有网络但服务端重连中”误显示为正常。
+
+无法可靠读取跨平台的电池省电模式，因此 V1.5 使用 `hardwareConcurrency` / `deviceMemory` 的保守阈值禁用可选动画，并尊重 `prefers-reduced-motion`；不影响玩法与服务端状态。
 
 ## 安全与运维边界
 

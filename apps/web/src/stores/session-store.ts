@@ -3,12 +3,14 @@ import type { ConnectionStatus, GameView, RoomView } from '@bluff-tavern/shared'
 
 interface SessionState {
   connection: ConnectionStatus;
+  networkOnline: boolean;
   room: RoomView | null;
   playerId: string | null;
   sessionToken: string | null;
   notice: string | null;
   game: GameView | null;
   setConnection: (connection: ConnectionStatus) => void;
+  setNetworkOnline: (networkOnline: boolean) => void;
   enterRoom: (room: RoomView, playerId: string, sessionToken: string) => void;
   updateRoom: (room: RoomView) => void;
   leaveRoom: () => void;
@@ -18,8 +20,9 @@ interface SessionState {
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
-  connection: 'connecting', room: null, playerId: null, sessionToken: null, notice: null, game: null,
+  connection: 'connecting', networkOnline: navigator.onLine, room: null, playerId: null, sessionToken: null, notice: null, game: null,
   setConnection: (connection) => set({ connection }),
+  setNetworkOnline: (networkOnline) => set({ networkOnline }),
   enterRoom: (room, playerId, sessionToken) => set({ room, playerId, sessionToken, notice: null }),
   updateRoom: (room) => set({ room }),
   leaveRoom: () => set({ room: null, playerId: null, sessionToken: null, game: null }),

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#321b18"/><stop offset="1" stop-color="#120d0b"/></linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8b303d"/><stop offset="1" stop-color="#4c1720"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#wood)"/>
+  <circle cx="256" cy="256" r="206" fill="none" stroke="#a67c3d" stroke-width="14" opacity=".72"/>
+  <path d="M167 119h178q34 0 34 34v206q0 34-34 34H167q-34 0-34-34V153q0-34 34-34Z" fill="url(#card)" stroke="#d4a85d" stroke-width="13"/>
+  <path d="M163 151h186M163 361h186M161 151v210M351 151v210" fill="none" stroke="#e9c36f" stroke-width="5" opacity=".7"/>
+  <path d="M256 176c26 31 37 52 37 72 0 25-16 42-37 42s-37-17-37-42c0-20 11-41 37-72Z" fill="#f2c777"/>
+  <ellipse cx="256" cy="325" rx="50" ry="25" fill="#120d0b" stroke="#d4a85d" stroke-width="7"/>
+  <circle cx="239" cy="324" r="8" fill="#f2c777"/><circle cx="273" cy="324" r="8" fill="#f2c777"/>
+</svg>

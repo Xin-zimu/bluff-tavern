@@ -4,4 +4,10 @@ import type { ClientToServerEvents, ServerToClientEvents } from '@bluff-tavern/s
 const configuredUrl: string | undefined = import.meta.env.VITE_SERVER_URL;
 // Production uses the same origin so Nginx can proxy /socket.io/ without exposing Node's port.
 const url = configuredUrl || window.location.origin;
-export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(url, { autoConnect: false });
+export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(url, {
+  autoConnect: false,
+  reconnection: true,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 4_000,
+  randomizationFactor: 0.2,
+});

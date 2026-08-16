@@ -8,24 +8,38 @@ import { useSessionStore } from './stores/session-store';
 
 export function App() {
   const state = useSessionStore();
-  const { setConnection, updateRoom, leaveRoom: clearRoom, setNotice, setGame } = state;
+  const { setConnection, setNetworkOnline, updateRoom, leaveRoom: clearRoom, setNotice, setGame } = state;
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    const connected = () => {
-      setConnection('connected');
+    const resumeStoredSession = () => {
       const sessionToken = localStorage.getItem('bluff-tavern.session-token');
-      if (sessionToken && !useSessionStore.getState().room) socket.emit('session:resume', { sessionToken }, (result) => {
+      if (!sessionToken) return;
+      socket.emit('session:resume', { sessionToken }, (result) => {
         if (result.ok) useSessionStore.getState().enterRoom(result.data.room, result.data.playerId, result.data.sessionToken);
         else localStorage.removeItem('bluff-tavern.session-token');
       });
     };
+    const connected = () => {
+      setConnection('connected');
+      resumeStoredSession();
+    };
     const disconnected = () => setConnection('disconnected');
+    const online = () => { setNetworkOnline(true); socket.connect(); };
+    const offline = () => setNetworkOnline(false);
+    const visibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      setNetworkOnline(navigator.onLine);
+      if (socket.connected) resumeStoredSession(); else socket.connect();
+    };
     const closeRoom = () => clearRoom();
     const kicked = (message: string) => { clearRoom(); setNotice(message); };
     socket.on('connect', connected).on('disconnect', disconnected).on('room:state', updateRoom).on('room:closed', closeRoom).on('room:kicked', kicked).on('game:state', setGame).on('game:turnStarted', setGame);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    document.addEventListener('visibilitychange', visibilityChange);
     socket.connect();
-    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', updateRoom).off('room:closed', closeRoom).off('room:kicked', kicked).off('game:state', setGame).off('game:turnStarted', setGame); socket.disconnect(); };
-  }, [setConnection, updateRoom, clearRoom, setNotice, setGame]);
+    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', updateRoom).off('room:closed', closeRoom).off('room:kicked', kicked).off('game:state', setGame); window.removeEventListener('online', online); window.removeEventListener('offline', offline); document.removeEventListener('visibilitychange', visibilityChange); socket.disconnect(); };
+  }, [setConnection, setNetworkOnline, updateRoom, clearRoom, setNotice, setGame]);
 
   const createRoom = (nickname: string) => {
     setBusy(true);
@@ -89,11 +103,16 @@ export function App() {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
+  const fullscreen = () => {
+    if (!document.fullscreenElement) void document.documentElement.requestFullscreen().catch(() => state.setNotice('当前浏览器无法进入全屏'));
+    else void document.exitFullscreen();
+  };
+  const lowPerformance = navigator.hardwareConcurrency <= 4 || ('deviceMemory' in navigator && (navigator as Navigator & { deviceMemory?: number }).deviceMemory !== undefined && (navigator as Navigator & { deviceMemory?: number }).deviceMemory! <= 4);
 
-  return <div className="app-shell">
-    <ConnectionBadge status={state.connection} />
+  return <div className={`app-shell${lowPerformance ? ' app-shell--low-power' : ''}`}>
+    <ConnectionBadge status={state.connection} networkOnline={state.networkOnline} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
-    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} />
+    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onMaxPlayersChange={updateMaxPlayers} onKick={kickPlayer} onStart={startGame} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
     <footer>V1.0 · 原创占位视觉 · 不含原游戏版权资产</footer>

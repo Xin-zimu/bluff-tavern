@@ -1,0 +1,14 @@
+{
+  "name": "诡牌酒馆",
+  "short_name": "诡牌酒馆",
+  "description": "原创多人诈唬派对游戏",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17110f",
+  "theme_color": "#17110f",
+  "orientation": "any",
+  "icons": [
+    { "src": "/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
