@@ -55,6 +55,10 @@ React screen
 
 7–8 人沿用同一权威状态机，但选取 40 张牌和两发实弹配置。客户端根据 viewer 的 playerId 对公开座位做相对排序，并将自己作为最后一个座位；八人网格将其跨两列放在底部中央，窄屏退化为一列。服务端仍按每位 viewer 单独发放 `GameView`，所以八人同步不会泄漏任何其他玩家的真实手牌。
 
+## V3.0 Party/Custom
+
+`RoomSettings` 在大厅由房主权限保护，开局时复制到 `InternalGame`。Party（或启用事件的 Custom）会由可注入随机源在每轮选出公开事件：DRUNKEN 仅重排服务器手牌顺序、RAPID_NIGHT 缩短该轮权威时限、DOUBLE_DANGER 令下一次惩罚检查相邻弹巢。Custom 可设定 5–30 秒时限与 1–5 发实弹；客户端只能显示 `GameView.tavernEvent`，不能选择事件或裁决命中。
+
 ## 安全与运维边界
 
 输入由 Zod 校验；错误向用户返回中文稳定消息；日志不记录 token 或隐私数据。`.env` 被忽略，仅提交无秘密的示例。V1.0 提供 Nginx 反代与 systemd 服务模板，Node 默认绑定回环地址并由 Nginx 暴露同源网页与 `/socket.io/`。HTTPS、限流、Redis、多实例与持久化仍属后续版本；部署前必须自行配置证书及域名。

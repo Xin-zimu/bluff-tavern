@@ -1,11 +1,15 @@
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 export type RoomStatus = 'LOBBY' | 'STARTING' | 'PLAYING' | 'ROUND_RESULT' | 'GAME_OVER' | 'CLOSED';
 export type PlayerStatus = 'CONNECTED' | 'DISCONNECTED' | 'READY' | 'PLAYING' | 'ELIMINATED' | 'SPECTATING';
-export type GameMode = 'CLASSIC' | 'QUICK';
+export type GameMode = 'CLASSIC' | 'QUICK' | 'PARTY' | 'CUSTOM';
+export type TavernEventType = 'BLACKOUT' | 'DRUNKEN' | 'RAPID_NIGHT' | 'DOUBLE_DANGER';
 
 export interface RoomSettings {
   maxPlayers: number;
   gameMode: GameMode;
+  turnDurationSeconds: number;
+  eventEnabled: boolean;
+  bulletCount: number | null;
 }
 
 export interface PlayerView {
@@ -49,6 +53,7 @@ export interface GamePlayerView {
 export interface GameView {
   gameMode: GameMode;
   turnDurationSeconds: number;
+  tavernEvent: { type: TavernEventType; roundNumber: number } | null;
   roundNumber: number;
   phase: GamePhase;
   targetCard: Exclude<CardRank, 'JOKER'>;

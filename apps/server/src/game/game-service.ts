@@ -1,4 +1,4 @@
-import { CARDS_PER_RANK_BY_PLAYER_COUNT, REVOLVER_BULLETS_BY_PLAYER_COUNT, type CardRank, type GamePhase, type GameView, type RoomView } from '@bluff-tavern/shared';
+import { CARDS_PER_RANK_BY_PLAYER_COUNT, REVOLVER_BULLETS_BY_PLAYER_COUNT, type CardRank, type GamePhase, type GameView, type RoomView, type TavernEventType } from '@bluff-tavern/shared';
 import { RoomError } from '../rooms/room-store.js';
 import type { RandomService } from './random.js';
 
@@ -17,6 +17,8 @@ interface InternalGame {
   alivePlayerIds: Set<string>;
   winnerId: string | null;
   gameMode: RoomView['settings']['gameMode'];
+  settings: RoomView['settings'];
+  tavernEvent: GameView['tavernEvent'];
   revolver: { chamberCount: number; bulletPositions: Set<number>; currentChamber: number; shotsTaken: number };
 }
 
@@ -38,7 +40,8 @@ export class GameService {
       phase: 'TURN', lastPlay: null, challengeResult: null,
       punishment: null, alivePlayerIds: new Set(room.players.map((player) => player.id)), winnerId: null,
       gameMode: room.settings.gameMode,
-      revolver: this.createRevolver(room.players.length),
+      settings: { ...room.settings }, tavernEvent: null,
+      revolver: this.createRevolver(room.players.length, room.settings.bulletCount),
     };
     this.dealRound(game);
     this.games.set(room.code, game);
@@ -92,7 +95,7 @@ export class GameService {
     const playerId = game.challengeResult.failedPlayerId;
     game.phase = 'PUNISHMENT';
     const chamber = game.revolver.currentChamber;
-    const hit = game.revolver.bulletPositions.has(chamber);
+    const hit = game.revolver.bulletPositions.has(chamber) || (game.tavernEvent?.type === 'DOUBLE_DANGER' && game.revolver.bulletPositions.has((chamber + 1) % game.revolver.chamberCount));
     game.revolver.currentChamber = (chamber + 1) % game.revolver.chamberCount;
     game.revolver.shotsTaken += 1;
     game.punishment = { playerId, chamber, hit };
@@ -117,7 +120,8 @@ export class GameService {
     const hand = game.hands.get(viewerId) ?? [];
     return {
       gameMode: game.gameMode,
-      turnDurationSeconds: game.gameMode === 'QUICK' ? 7 : 15,
+      turnDurationSeconds: game.tavernEvent?.type === 'RAPID_NIGHT' ? Math.max(5, Math.floor(this.baseTurnDuration(game) / 2)) : this.baseTurnDuration(game),
+      tavernEvent: game.tavernEvent ? { ...game.tavernEvent } : null,
       roundNumber: game.roundNumber,
       phase: game.phase,
       targetCard: game.targetCard,
@@ -150,6 +154,8 @@ export class GameService {
     game.hands = new Map(game.playerIds.map((playerId) => [playerId, []]));
     deck.forEach((card, index) => game.hands.get(activePlayers[index % activePlayers.length]!)!.push(card));
     game.targetCard = targets[this.random.nextInt(targets.length)]!;
+    game.tavernEvent = this.selectEvent(game);
+    if (game.tavernEvent?.type === 'DRUNKEN') for (const hand of game.hands.values()) this.shuffle(hand);
     game.turnIndex = game.playerIds.indexOf(activePlayers[this.random.nextInt(activePlayers.length)]!);
     game.discardCount = 0;
     game.phase = 'TURN';
@@ -177,9 +183,17 @@ export class GameService {
     return game;
   }
 
-  private createRevolver(playerCount: number) {
+  private selectEvent(game: InternalGame): GameView['tavernEvent'] {
+    if (!game.settings.eventEnabled && game.gameMode !== 'PARTY') return null;
+    const types: TavernEventType[] = ['DRUNKEN', 'RAPID_NIGHT', 'DOUBLE_DANGER'];
+    return { type: types[this.random.nextInt(types.length)]!, roundNumber: game.roundNumber };
+  }
+
+  private baseTurnDuration(game: InternalGame): number { return game.gameMode === 'QUICK' ? 7 : game.settings.turnDurationSeconds; }
+
+  private createRevolver(playerCount: number, configuredBullets: number | null) {
     const chamberCount = 6;
-    const bullets = REVOLVER_BULLETS_BY_PLAYER_COUNT.find((entry) => playerCount <= entry.maxPlayers)?.bullets;
+    const bullets = configuredBullets ?? REVOLVER_BULLETS_BY_PLAYER_COUNT.find((entry) => playerCount <= entry.maxPlayers)?.bullets;
     if (!bullets) throw new Error('Missing revolver configuration');
     const positions = new Set<number>();
     while (positions.size < bullets) {

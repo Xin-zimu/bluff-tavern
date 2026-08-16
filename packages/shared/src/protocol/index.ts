@@ -12,7 +12,10 @@ export const readyRoomSchema = z.object({ roomCode: roomCodeSchema, ready: z.boo
 export const updateRoomSettingsSchema = z.object({
   roomCode: roomCodeSchema,
   maxPlayers: z.number().int().min(MIN_PLAYERS).max(MAX_PLAYERS),
-  gameMode: z.enum(['CLASSIC', 'QUICK']).default('CLASSIC'),
+  gameMode: z.enum(['CLASSIC', 'QUICK', 'PARTY', 'CUSTOM']).default('CLASSIC'),
+  turnDurationSeconds: z.number().int().min(5).max(30).optional(),
+  eventEnabled: z.boolean().optional(),
+  bulletCount: z.number().int().min(1).max(5).nullable().optional(),
   requestId: requestIdSchema,
 });
 export const kickPlayerSchema = z.object({ roomCode: roomCodeSchema, targetPlayerId: z.string().uuid(), requestId: requestIdSchema });

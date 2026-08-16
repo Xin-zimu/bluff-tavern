@@ -21,7 +21,7 @@ export class RoomStore {
     const now = Date.now();
     this.rooms.set(code, {
       id: randomUUID(), code, hostPlayerId: player.id, status: 'LOBBY', maxPlayers: MAX_PLAYERS,
-      settings: { maxPlayers: MAX_PLAYERS, gameMode: 'CLASSIC' }, players: [player], createdAt: now,
+      settings: { maxPlayers: MAX_PLAYERS, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null }, players: [player], createdAt: now,
     });
     return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken };
   }
@@ -150,7 +150,7 @@ export class RoomStore {
     return this.rooms.get(code)?.players.find((player) => player.id === playerId)?.socketId ?? null;
   }
 
-  private getView(code: string): RoomView {
+  getView(code: string): RoomView {
     const room = this.requireRoom(code);
     return {
       id: room.id, code: room.code, hostPlayerId: room.hostPlayerId, status: room.status,

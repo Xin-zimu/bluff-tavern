@@ -74,7 +74,13 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     const cached = processedRequests.get(parsed.data.requestId);
     if (cached) return ack(cached);
     try {
-      const room = rooms.updateSettings(parsed.data.roomCode, socket.data.playerId!, { maxPlayers: parsed.data.maxPlayers, gameMode: parsed.data.gameMode });
+      const previous = rooms.getView(parsed.data.roomCode);
+      const room = rooms.updateSettings(parsed.data.roomCode, socket.data.playerId!, {
+        maxPlayers: parsed.data.maxPlayers, gameMode: parsed.data.gameMode,
+        turnDurationSeconds: parsed.data.turnDurationSeconds ?? previous.settings.turnDurationSeconds,
+        eventEnabled: parsed.data.eventEnabled ?? previous.settings.eventEnabled,
+        bulletCount: parsed.data.bulletCount ?? previous.settings.bulletCount,
+      });
       const result = { ok: true as const, data: room };
       processedRequests.set(parsed.data.requestId, result);
       logger.info({ event: 'room_settings_updated', roomCode: room.code, playerId: socket.data.playerId });

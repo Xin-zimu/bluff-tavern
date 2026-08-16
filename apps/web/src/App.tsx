@@ -5,6 +5,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
+import type { GameMode } from '@bluff-tavern/shared';
 
 export function App() {
   const state = useSessionStore();
@@ -67,9 +68,9 @@ export function App() {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
-  const updateSettings = (maxPlayers: number, gameMode: 'CLASSIC' | 'QUICK') => {
+  const updateSettings = (settings: { maxPlayers: number; gameMode: GameMode; turnDurationSeconds: number; eventEnabled: boolean; bulletCount: number | null }) => {
     if (!state.room) return;
-    socket.emit('room:updateSettings', { roomCode: state.room.code, maxPlayers, gameMode, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('room:updateSettings', { roomCode: state.room.code, ...settings, requestId: crypto.randomUUID() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
