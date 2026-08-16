@@ -5,6 +5,8 @@ import type { ClientToServerEvents, InterServerEvents, ServerToClientEvents, Soc
 import type { ServerConfig } from './config/env.js';
 import { RoomStore } from './rooms/room-store.js';
 import { registerRoomHandlers } from './socket/register-room-handlers.js';
+import { GameService } from './game/game-service.js';
+import { cryptoRandom } from './game/random.js';
 
 export async function createApp(config: ServerConfig) {
   const app = Fastify({ logger: { level: config.logLevel } });
@@ -14,7 +16,8 @@ export async function createApp(config: ServerConfig) {
     cors: { origin: config.clientOrigin }, transports: ['websocket', 'polling'],
   });
   const rooms = new RoomStore();
-  io.on('connection', (socket) => registerRoomHandlers(io, socket, rooms, app.log));
+  const games = new GameService(cryptoRandom);
+  io.on('connection', (socket) => registerRoomHandlers(io, socket, rooms, games, app.log));
   app.addHook('onClose', () => io.close());
   return { app, io, rooms };
 }

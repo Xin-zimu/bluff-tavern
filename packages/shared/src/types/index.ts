@@ -34,6 +34,24 @@ export interface RoomPlayerEvent {
   player: PlayerView;
 }
 
+export type CardRank = 'A' | 'K' | 'Q' | 'JOKER';
+export type GamePhase = 'TURN';
+
+export interface GamePlayerView {
+  playerId: string;
+  cardCount: number;
+}
+
+export interface GameView {
+  roundNumber: number;
+  phase: GamePhase;
+  targetCard: Exclude<CardRank, 'JOKER'>;
+  turnPlayerId: string;
+  discardCount: number;
+  players: GamePlayerView[];
+  hand: CardRank[];
+}
+
 export interface AckSuccess<T> { ok: true; data: T }
 export interface AckFailure { ok: false; error: { code: string; message: string } }
 export type Ack<T> = AckSuccess<T> | AckFailure;

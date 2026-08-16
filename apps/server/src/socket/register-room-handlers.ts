@@ -1,5 +1,6 @@
 import type { Server, Socket } from 'socket.io';
-import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, type Ack, type ClientToServerEvents, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
+import { createRoomSchema, joinRoomSchema, leaveRoomSchema, readyRoomSchema, updateRoomSettingsSchema, kickPlayerSchema, startGameSchema, playCardsSchema, type Ack, type ClientToServerEvents, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
+import { GameService } from '../game/game-service.js';
 import { RoomError, RoomStore } from '../rooms/room-store.js';
 
 type GameServer = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
@@ -14,8 +15,9 @@ const failure = (error: unknown) => error instanceof RoomError
   ? { ok: false as const, error: { code: error.code, message: error.message } }
   : { ok: false as const, error: { code: 'SERVER_ERROR', message: '服务器暂时不可用' } };
 
-export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: RoomStore, logger: AppLogger): void {
+export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: RoomStore, games: GameService, logger: AppLogger): void {
   const processedRequests = new Map<string, Ack<RoomView>>();
+  const processedGameRequests = new Map<string, Ack<GameView>>();
   socket.on('room:create', (payload, ack) => {
     const parsed = createRoomSchema.safeParse(payload);
     if (!parsed.success) return ack(invalid);
@@ -102,6 +104,39 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     } catch (error) { ack(failure(error)); }
   });
 
+  socket.on('game:start', (payload, ack) => {
+    const parsed = startGameSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    const cached = processedGameRequests.get(parsed.data.requestId);
+    if (cached) return ack(cached);
+    try {
+      const room = rooms.startGame(parsed.data.roomCode, socket.data.playerId!);
+      const state = games.start(room);
+      const result = { ok: true as const, data: state };
+      processedGameRequests.set(parsed.data.requestId, result);
+      logger.info({ event: 'game_started', roomCode: room.code, playerId: socket.data.playerId });
+      io.to(room.code).emit('room:state', room);
+      broadcastGameState(io, rooms, games, room.code);
+      ack(result);
+    } catch (error) { ack(failure(error)); }
+  });
+
+  socket.on('game:playCards', (payload, ack) => {
+    const parsed = playCardsSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    const cached = processedGameRequests.get(parsed.data.requestId);
+    if (cached) return ack(cached);
+    try {
+      const result = games.playCards(parsed.data.roomCode, socket.data.playerId!, parsed.data.cardIndexes);
+      const ackResult = { ok: true as const, data: result.state };
+      processedGameRequests.set(parsed.data.requestId, ackResult);
+      logger.info({ event: 'cards_played', roomCode: parsed.data.roomCode, playerId: socket.data.playerId, count: result.playedCount });
+      io.to(parsed.data.roomCode).emit('game:cardsPlayed', { playerId: socket.data.playerId!, count: result.playedCount, roundNumber: result.state.roundNumber });
+      broadcastGameState(io, rooms, games, parsed.data.roomCode);
+      ack(ackResult);
+    } catch (error) { ack(failure(error)); }
+  });
+
   socket.on('disconnect', () => leaveCurrent(io, socket, rooms, logger));
 }
 
@@ -120,4 +155,13 @@ function leaveCurrent(io: GameServer, socket: GameSocket, rooms: RoomStore, logg
 
 function isCurrentMember(socket: GameSocket, roomCode: string): boolean {
   return socket.data.roomCode === roomCode && socket.data.playerId !== undefined;
+}
+
+function broadcastGameState(io: GameServer, rooms: RoomStore, games: GameService, roomCode: string): void {
+  for (const [playerId, state] of games.getViews(roomCode)) {
+    const socketId = rooms.getSocketId(roomCode, playerId);
+    if (!socketId) continue;
+    io.to(socketId).emit('game:state', state);
+    io.to(socketId).emit('game:turnStarted', state);
+  }
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { io as createClient, type Socket as ClientSocket } from 'socket.io-client';
-import type { Ack, ClientToServerEvents, RoomMembership, RoomView, ServerToClientEvents } from '@bluff-tavern/shared';
+import type { Ack, ClientToServerEvents, GameView, RoomMembership, RoomView, ServerToClientEvents } from '@bluff-tavern/shared';
 import { createApp } from '../src/app.js';
 
 const clients: ClientSocket<ServerToClientEvents, ClientToServerEvents>[] = [];
@@ -16,7 +16,7 @@ function connect(url: string) {
   });
 }
 
-function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick', payload: object) {
+function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'game:start' | 'game:playCards', payload: object) {
   return new Promise<Ack<T>>((resolve) => client.emit(event, payload as never, resolve as never));
 }
 
@@ -56,21 +56,28 @@ describe('real Socket.IO multiplayer', () => {
       await Promise.all([a, ...peers.map(({ peer }) => peer)].map((client) => emitAck<RoomView>(client, 'room:ready', {
         roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
       })));
-      const kicked = new Promise<string>((resolve) => peers[2]!.peer.once('room:kicked', resolve));
-      const afterKick = new Promise<number>((resolve) => a.on('room:state', (room: RoomView) => {
-        if (room.players.length === 3 && room.players.every((player) => player.status === 'READY')) resolve(3);
-      }));
-      const kickResult = await emitAck<RoomView>(a, 'room:kick', {
-        roomCode: created.data.room.code, targetPlayerId: peers[2]!.playerId, requestId: randomUUID(),
+      const playerClients = new Map<string, typeof a>();
+      playerClients.set(created.data.playerId, a);
+      peers.forEach(({ peer, playerId }) => playerClients.set(playerId, peer));
+      const gameStates = new Map<string, GameView>();
+      for (const [playerId, client] of playerClients) client.on('game:state', (state: GameView) => gameStates.set(playerId, state));
+      const started = await emitAck<GameView>(a, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(started.ok).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(gameStates.size).toBe(4);
+      if (!started.ok) throw new Error('Game did not start');
+      const turnState = gameStates.get(started.data.turnPlayerId);
+      const turnClient = playerClients.get(started.data.turnPlayerId);
+      if (!turnState || !turnClient) throw new Error('Missing turn state');
+      const played = await emitAck<GameView>(turnClient, 'game:playCards', {
+        roomCode: created.data.room.code, cardIndexes: [0], requestId: randomUUID(),
       });
-      expect(kickResult.ok).toBe(true);
-      expect(await kicked).toContain('移出房间');
-      expect(await afterKick).toBe(3);
+      expect(played).toMatchObject({ ok: true, data: { discardCount: 1 } });
       const afterLeave = new Promise<number>((resolve) => a.on('room:state', (room: RoomView) => {
-        if (room.players.length === 2) resolve(2);
+        if (room.players.length === 3) resolve(3);
       }));
       peers[0]!.peer.disconnect();
-      expect(await afterLeave).toBe(2);
+      expect(await afterLeave).toBe(3);
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;

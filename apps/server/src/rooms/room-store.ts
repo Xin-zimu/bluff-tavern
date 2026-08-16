@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { MAX_PLAYERS, type PlayerView, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
+import { MAX_PLAYERS, MIN_PLAYERS, type PlayerView, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
 import { createRoomCode, type RandomIndex } from './room-code.js';
 
 interface InternalPlayer extends PlayerView { socketId: string }
@@ -69,6 +69,17 @@ export class RoomStore {
     return { room: this.getView(code), kickedPlayer: this.toPlayerView(kicked), kickedSocketId: kicked.socketId };
   }
 
+  startGame(code: string, hostPlayerId: string): RoomView {
+    const room = this.requireMember(code, hostPlayerId);
+    this.requireHost(room, hostPlayerId);
+    if (room.status !== 'LOBBY') throw new RoomError('GAME_ALREADY_STARTED', '牌局已经开始');
+    if (room.players.length < MIN_PLAYERS) throw new RoomError('NOT_ENOUGH_PLAYERS', '至少需要两名玩家');
+    if (!room.players.every((player) => player.status === 'READY')) throw new RoomError('PLAYERS_NOT_READY', '所有玩家准备后才能开始');
+    room.status = 'PLAYING';
+    room.players.forEach((player) => { player.status = 'PLAYING'; });
+    return this.getView(code);
+  }
+
   leaveBySocket(socketId: string): Departure | null {
     for (const [code, room] of this.rooms) {
       const index = room.players.findIndex((player) => player.socketId === socketId);
@@ -88,6 +99,10 @@ export class RoomStore {
   }
 
   has(code: string): boolean { return this.rooms.has(code); }
+
+  getSocketId(code: string, playerId: string): string | null {
+    return this.rooms.get(code)?.players.find((player) => player.id === playerId)?.socketId ?? null;
+  }
 
   private getView(code: string): RoomView {
     const room = this.requireRoom(code);

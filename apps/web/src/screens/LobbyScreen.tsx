@@ -7,9 +7,10 @@ interface LobbyProps {
   onReady: (ready: boolean) => void;
   onMaxPlayersChange: (maxPlayers: number) => void;
   onKick: (playerId: string) => void;
+  onStart: () => void;
 }
 
-export function LobbyScreen({ room, playerId, onLeave, onReady, onMaxPlayersChange, onKick }: LobbyProps) {
+export function LobbyScreen({ room, playerId, onLeave, onReady, onMaxPlayersChange, onKick, onStart }: LobbyProps) {
   const copyCode = () => void navigator.clipboard?.writeText(room.code);
   const isHost = room.hostPlayerId === playerId;
   const self = room.players.find((player) => player.id === playerId);
@@ -41,6 +42,7 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onMaxPlayersChan
       {self && <button className={`button ${self.status === 'READY' ? 'button--secondary' : 'button--primary'}`} onClick={() => onReady(self.status !== 'READY')}>
         {self.status === 'READY' ? '取消准备' : '准备就绪'}
       </button>}
+      {isHost && <button className="button button--primary" disabled={room.players.length < 2 || !room.players.every((player) => player.status === 'READY')} onClick={onStart}>开始牌局</button>}
       <p className="future-note">准备、房主配置与移出玩家已开放；开局将在下一版本实现。</p>
     </section>
   </main>;
