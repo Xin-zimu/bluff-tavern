@@ -1,0 +1,32 @@
+{
+  "name": "bluff-tavern",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "predev": "pnpm --filter @bluff-tavern/shared build",
+    "dev": "concurrently -n web,server -c magenta,cyan \"pnpm --filter @bluff-tavern/web dev\" \"pnpm --filter @bluff-tavern/server dev\"",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "pretest": "pnpm --filter @bluff-tavern/shared build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "@types/node": "^24.3.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.34.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.41.0",
+    "vitest": "^3.2.4"
+  }
+}
