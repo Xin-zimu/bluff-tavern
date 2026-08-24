@@ -7,3 +7,6 @@ coverage/
 *.log
 .DS_Store
 releases/
+
+# Local upload bundle; maintained source and artwork are tracked separately.
+bluff-tavern-source.tar.gz

@@ -1,4 +1,5 @@
 import type { RoomView } from '@bluff-tavern/shared';
+import { CHARACTER_ART, CHARACTER_IDS } from '../art';
 
 interface LobbyProps {
   room: RoomView;
@@ -43,19 +44,27 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
         <select id="bullet-count" value={room.settings.bulletCount ?? 0} onChange={(event) => onSettingsChange({ ...room.settings, bulletCount: Number(event.target.value) || null })}>{[0, 1, 2, 3, 4, 5].map((count) => <option key={count} value={count}>{count || '默认'}</option>)}</select>
       </label><label className="settings-control"><span>随机事件</span><input type="checkbox" checked={room.settings.eventEnabled} onChange={(event) => onSettingsChange({ ...room.settings, eventEnabled: event.target.checked })} /></label></>}
       <ul className="player-list">
-        {room.players.map((player, index) => <li key={player.id} className={player.id === playerId ? 'is-self' : ''}>
-          <div className={`avatar avatar--${index % 4}`} aria-hidden="true">{player.nickname.slice(0, 1).toUpperCase()}</div>
+        {room.players.map((player) => <li key={player.id} className={player.id === playerId ? 'is-self' : ''}>
+          {player.characterId ? <div className="character-portrait character-portrait--small" aria-hidden="true"><img src={CHARACTER_ART[player.characterId].image} alt="" /></div>
+            : <div className="avatar" aria-hidden="true">{player.nickname.slice(0, 1).toUpperCase()}</div>}
           <div><strong>{player.nickname}</strong><small>{player.id === playerId ? '你' : player.status === 'READY' ? '已准备' : '已连接'}</small></div>
           {player.status === 'READY' && <span className="ready-mark">准备</span>}
           {player.id === room.hostPlayerId && <span className="host-mark">创建者</span>}
           {isHost && player.id !== playerId && <button className="kick-button" onClick={() => onKick(player.id)}>移出</button>}
         </li>)}
       </ul>
-      {self && <div className="character-picker" aria-label="选择原创角色">{(['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA'] as const).map((character) => <button key={character} disabled={room.players.some((player) => player.id !== playerId && player.characterId === character)} className={self.characterId === character ? 'selected' : ''} onClick={() => onSelectCharacter(character)}>{character}</button>)}</div>}
+      {self && <div className="character-picker" aria-label="选择原创角色">{CHARACTER_IDS.map((character) => {
+        const selected = self.characterId === character;
+        const unavailable = room.players.some((player) => player.id !== playerId && player.characterId === character);
+        return <button key={character} type="button" disabled={unavailable} className={selected ? 'selected' : ''} aria-pressed={selected} onClick={() => onSelectCharacter(character)}>
+          <img src={CHARACTER_ART[character].image} alt="" loading="lazy" />
+          <span>{CHARACTER_ART[character].name}</span>
+        </button>;
+      })}</div>}
       {self && <button className={`button ${self.status === 'READY' ? 'button--secondary' : 'button--primary'}`} onClick={() => onReady(self.status !== 'READY')}>
         {self.status === 'READY' ? '取消准备' : '准备就绪'}
       </button>}
-      {isHost && <button className="button button--primary" disabled={room.players.length < 2 || !room.players.every((player) => player.status === 'READY')} onClick={onStart}>开始牌局</button>}
+      {isHost && <button className="button button--primary button--art-start" disabled={room.players.length < 2 || !room.players.every((player) => player.status === 'READY')} onClick={onStart}>开始牌局</button>}
       <p className="future-note">所有玩家准备后，由房主开始这局牌。</p>
     </section>
   </main>;

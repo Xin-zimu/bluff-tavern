@@ -135,13 +135,14 @@ export function App() {
     else void navigator.clipboard?.writeText(text).then(() => state.setNotice('战报已复制'));
   };
   const lowPerformance = navigator.hardwareConcurrency <= 4 || ('deviceMemory' in navigator && (navigator as Navigator & { deviceMemory?: number }).deviceMemory !== undefined && (navigator as Navigator & { deviceMemory?: number }).deviceMemory! <= 4);
+  const screen = state.room && state.game ? 'game' : state.room ? 'lobby' : 'home';
 
-  return <div className={`app-shell${lowPerformance ? ' app-shell--low-power' : ''}`}>
+  return <div className={`app-shell app-shell--${screen}${state.game?.phase === 'GAME_OVER' ? ' app-shell--victory' : ''}${lowPerformance ? ' app-shell--low-power' : ''}`}>
     <ConnectionBadge status={state.connection} networkOnline={state.networkOnline} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
     {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V1.0 · 原创占位视觉 · 不含原游戏版权资产</footer>
+    <footer>V5.0 · 原创酒馆视觉 · 不含第三方游戏版权素材</footer>
   </div>;
 }

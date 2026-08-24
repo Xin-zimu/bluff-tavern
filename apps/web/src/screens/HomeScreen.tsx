@@ -12,7 +12,7 @@ export function HomeScreen({ busy, onCreate, onJoin }: Props) {
   const submitJoin = (event: FormEvent) => { event.preventDefault(); onJoin(nickname, roomCode); };
   return <main className="home">
     <section className="hero" aria-labelledby="game-title">
-      <div className="emblem" aria-hidden="true"><span>♠</span></div>
+      <img className="emblem" src="/assets/ui/game_emblem.png" alt="" aria-hidden="true" />
       <p className="eyebrow">BLUFF TAVERN</p>
       <h1 id="game-title">诡牌酒馆</h1>
       <p className="tagline">推开暗门，找张椅子。今晚先从聚齐牌友开始。</p>
