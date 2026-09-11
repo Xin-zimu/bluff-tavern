@@ -10,6 +10,7 @@ import type { ServerConfig } from './config/env.js';
 import { RoomStore } from './rooms/room-store.js';
 import { registerRoomHandlers } from './socket/register-room-handlers.js';
 import { GameService } from './game/game-service.js';
+import { GameScheduler } from './game/game-scheduler.js';
 import { cryptoRandom } from './game/random.js';
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
@@ -45,7 +46,7 @@ async function sendWebFile(reply: FastifyReply, filePath: string, cacheControl: 
 export async function createApp(config: ServerConfig) {
   const app = Fastify({ logger: { level: config.logLevel } });
   await app.register(cors, { origin: config.clientOrigin });
-  app.get('/health', () => ({ status: 'ok', version: '5.0.0', timestamp: Date.now() }));
+  app.get('/health', () => ({ status: 'ok', version: '6.0.0', timestamp: Date.now() }));
   if (config.webRoot) {
     const webRoot = resolve(config.webRoot);
     const webRootPrefix = `${webRoot}${sep}`;
@@ -77,7 +78,8 @@ export async function createApp(config: ServerConfig) {
   });
   const rooms = new RoomStore();
   const games = new GameService(cryptoRandom);
-  io.on('connection', (socket) => registerRoomHandlers(io, socket, rooms, games, app.log));
+  const scheduler = new GameScheduler();
+  io.on('connection', (socket) => registerRoomHandlers(io, socket, rooms, games, scheduler, app.log));
   app.addHook('onClose', () => io.close());
   return { app, io, rooms };
 }

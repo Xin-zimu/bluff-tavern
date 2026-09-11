@@ -2,6 +2,30 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [6.0.0] - 2026-09-11
+
+### Changed
+
+- 核心游戏层重构为 Match、Round、Turn 三层规则和显式 V6 phase 状态机。
+- Socket 接入改为接收命令、调用 GameService、广播 per-player `game:snapshot`，不在 handler 内写规则。
+- 质疑、翻牌、判定、左轮准备、扣扳机、结果、回合结束和胜利拆成独立服务器阶段。
+- V6.0 功能范围冻结为 Classic 与 Quick，Party、Custom、随机事件和道具暂时关闭。
+
+### Added
+
+- 每名玩家独立 6 弹巢左轮，服务器在 `PUNISHMENT_RESULT` 前不公开 `hit`。
+- `phaseSequence`、服务器 phase timing、`mustChallenge`、公开/私有状态分离和非权威 `game:cue`。
+- `GameScheduler` 统一管理每房间 authoritative phase timer 和超时自动操作。
+- 前端 `CinematicLayer`、翻牌/质疑/左轮/胜利基础演出、低性能模式和 reduced-motion 降级。
+- V6 规则、状态机、协议、动画和验收文档。
+
+### Fixed
+
+- 淘汰玩家不会再发牌或获得 turn。
+- 存活玩家每轮固定 5 张，避免 2 人局每人 10 张。
+- 出光手牌后进入强制质疑，避免所有人无牌导致死锁。
+- 重复 gameplay `requestId` 返回首次结果，不会重复执行状态修改。
+
 ## [5.0.0] - 2026-08-17
 
 ### Added

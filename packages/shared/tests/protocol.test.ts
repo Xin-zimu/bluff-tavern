@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { joinRoomSchema } from '../src/index.js';
+import { joinRoomSchema, playCardsSchema, updateRoomSettingsSchema } from '../src/index.js';
 
 describe('joinRoomSchema', () => {
   it('normalizes valid room codes and nicknames', () => {
@@ -10,5 +10,20 @@ describe('joinRoomSchema', () => {
 
   it('rejects ambiguous room-code characters', () => {
     expect(joinRoomSchema.safeParse({ nickname: '狼', roomCode: 'AB10OL' }).success).toBe(false);
+  });
+});
+
+describe('V6 protocol schemas', () => {
+  it('allows only Classic and Quick game modes', () => {
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'CLASSIC', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'QUICK', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'PARTY', requestId: crypto.randomUUID() }).success).toBe(false);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'CUSTOM', requestId: crypto.randomUUID() }).success).toBe(false);
+  });
+
+  it('requires one to three unique card indexes', () => {
+    expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 1, 2], requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 0], requestId: crypto.randomUUID() }).success).toBe(false);
+    expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 1, 2, 3], requestId: crypto.randomUUID() }).success).toBe(false);
   });
 });
