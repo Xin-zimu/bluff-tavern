@@ -1,4 +1,4 @@
-import type { RoomView } from '@bluff-tavern/shared';
+import type { RoomView, V6GameMode } from '@bluff-tavern/shared';
 import { CHARACTER_ART, CHARACTER_IDS } from '../art';
 
 interface LobbyProps {
@@ -6,7 +6,7 @@ interface LobbyProps {
   playerId: string | null;
   onLeave: () => void;
   onReady: (ready: boolean) => void;
-  onSettingsChange: (settings: RoomView['settings']) => void;
+  onSettingsChange: (settings: RoomView['settings'] & { gameMode: V6GameMode }) => void;
   onKick: (playerId: string) => void;
   onStart: () => void;
   onSelectCharacter: (characterId: NonNullable<RoomView['players'][number]['characterId']>) => void;
@@ -28,21 +28,15 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
     <section className="panel player-panel">
       <div className="panel-title"><h2>已入席玩家</h2><span>{room.players.length} / {room.maxPlayers}</span></div>
       {isHost && <label className="settings-control" htmlFor="max-players">最大人数
-        <select id="max-players" value={room.settings.maxPlayers} onChange={(event) => onSettingsChange({ ...room.settings, maxPlayers: Number(event.target.value) })}>
+        <select id="max-players" value={room.settings.maxPlayers} onChange={(event) => onSettingsChange({ ...room.settings, gameMode: room.settings.gameMode === 'QUICK' ? 'QUICK' : 'CLASSIC', maxPlayers: Number(event.target.value) })}>
           {[2, 3, 4, 5, 6, 7, 8].map((count) => <option key={count} value={count} disabled={count < room.players.length}>{count} 人</option>)}
         </select>
       </label>}
       {isHost && <label className="settings-control" htmlFor="game-mode">节奏
-        <select id="game-mode" value={room.settings.gameMode} onChange={(event) => onSettingsChange({ ...room.settings, gameMode: event.target.value as RoomView['settings']['gameMode'], eventEnabled: event.target.value === 'PARTY' || room.settings.eventEnabled })}>
+        <select id="game-mode" value={room.settings.gameMode} onChange={(event) => onSettingsChange({ ...room.settings, gameMode: event.target.value as V6GameMode, eventEnabled: false, bulletCount: null })}>
           <option value="CLASSIC">经典（15 秒）</option><option value="QUICK">快速（7 秒）</option>
-          <option value="PARTY">派对事件</option><option value="CUSTOM">自定义</option>
         </select>
       </label>}
-      {isHost && room.settings.gameMode === 'CUSTOM' && <><label className="settings-control" htmlFor="turn-seconds">回合秒数
-        <select id="turn-seconds" value={room.settings.turnDurationSeconds} onChange={(event) => onSettingsChange({ ...room.settings, turnDurationSeconds: Number(event.target.value) })}>{[5, 7, 10, 15, 20, 30].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}</select>
-      </label><label className="settings-control" htmlFor="bullet-count">实弹数
-        <select id="bullet-count" value={room.settings.bulletCount ?? 0} onChange={(event) => onSettingsChange({ ...room.settings, bulletCount: Number(event.target.value) || null })}>{[0, 1, 2, 3, 4, 5].map((count) => <option key={count} value={count}>{count || '默认'}</option>)}</select>
-      </label><label className="settings-control"><span>随机事件</span><input type="checkbox" checked={room.settings.eventEnabled} onChange={(event) => onSettingsChange({ ...room.settings, eventEnabled: event.target.checked })} /></label></>}
       <ul className="player-list">
         {room.players.map((player) => <li key={player.id} className={player.id === playerId ? 'is-self' : ''}>
           {player.characterId ? <div className="character-portrait character-portrait--small" aria-hidden="true"><img src={CHARACTER_ART[player.characterId].image} alt="" /></div>

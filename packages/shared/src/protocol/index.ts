@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MAX_CARDS_PER_PLAY, MAX_NICKNAME_LENGTH, MAX_PLAYERS, MIN_NICKNAME_LENGTH, MIN_PLAYERS, ROOM_CODE_LENGTH } from '../constants/index.js';
-import type { Ack, GameView, RoomMembership, RoomPlayerEvent, RoomView } from '../types/index.js';
+import type { Ack, GameCue, GameSnapshot, GameView, RoomMembership, RoomPlayerEvent, RoomView } from '../types/index.js';
 
 export const nicknameSchema = z.string().trim().min(MIN_NICKNAME_LENGTH).max(MAX_NICKNAME_LENGTH);
 export const roomCodeSchema = z.string().trim().toUpperCase().length(ROOM_CODE_LENGTH).regex(/^[2-9A-HJ-KM-NP-Z]+$/);
@@ -12,7 +12,7 @@ export const readyRoomSchema = z.object({ roomCode: roomCodeSchema, ready: z.boo
 export const updateRoomSettingsSchema = z.object({
   roomCode: roomCodeSchema,
   maxPlayers: z.number().int().min(MIN_PLAYERS).max(MAX_PLAYERS),
-  gameMode: z.enum(['CLASSIC', 'QUICK', 'PARTY', 'CUSTOM']).default('CLASSIC'),
+  gameMode: z.enum(['CLASSIC', 'QUICK']).default('CLASSIC'),
   turnDurationSeconds: z.number().int().min(5).max(30).optional(),
   eventEnabled: z.boolean().optional(),
   bulletCount: z.number().int().min(1).max(5).nullable().optional(),
@@ -55,6 +55,8 @@ export interface ServerToClientEvents {
   'room:playerJoined': (event: RoomPlayerEvent) => void;
   'room:playerLeft': (event: RoomPlayerEvent) => void;
   'room:kicked': (message: string) => void;
+  'game:snapshot': (state: GameSnapshot) => void;
+  'game:cue': (event: GameCue) => void;
   'game:state': (state: GameView) => void;
   'game:turnStarted': (state: GameView) => void;
   'game:cardsPlayed': (event: { playerId: string; count: number; roundNumber: number }) => void;

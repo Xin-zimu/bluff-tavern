@@ -16,8 +16,24 @@ function connect(url: string) {
   });
 }
 
-function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'game:start' | 'game:playCards' | 'session:resume', payload: object) {
+function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'game:start' | 'game:playCards' | 'game:challenge' | 'session:resume', payload: object) {
   return new Promise<Ack<T>>((resolve) => client.emit(event, payload as never, resolve as never));
+}
+
+function waitForGameState(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, predicate: (state: GameView) => boolean) {
+  return new Promise<GameView>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      client.off('game:snapshot', onState);
+      reject(new Error('Timed out waiting for game state'));
+    }, 3_000);
+    const onState = (state: GameView) => {
+      if (!predicate(state)) return;
+      clearTimeout(timer);
+      client.off('game:snapshot', onState);
+      resolve(state);
+    };
+    client.on('game:snapshot', onState);
+  });
 }
 
 describe('real Socket.IO multiplayer', () => {
@@ -124,11 +140,13 @@ describe('real Socket.IO multiplayer', () => {
       for (const [playerId, client] of playerClients) client.on('game:state', (state: GameView) => gameStates.set(playerId, state));
       const started = await emitAck<GameView>(a, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
       expect(started.ok).toBe(true);
+      const turnReady = await waitForGameState(a, (state) => state.phase === 'TURN');
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(gameStates.size).toBe(4);
       if (!started.ok) throw new Error('Game did not start');
-      const turnState = gameStates.get(started.data.turnPlayerId);
-      const turnClient = playerClients.get(started.data.turnPlayerId);
+      if (!turnReady.turnPlayerId) throw new Error('Missing turn player');
+      const turnState = gameStates.get(turnReady.turnPlayerId);
+      const turnClient = playerClients.get(turnReady.turnPlayerId);
       if (!turnState || !turnClient) throw new Error('Missing turn state');
       const played = await emitAck<GameView>(turnClient, 'game:playCards', {
         roomCode: created.data.room.code, cardIndexes: [0], requestId: randomUUID(),
@@ -172,6 +190,60 @@ describe('real Socket.IO multiplayer', () => {
       if (!resumed.ok) throw new Error('Resume failed');
       expect(resumed.data.room.players).toHaveLength(2);
       expect(resumed.data.room.players.find((player) => player.id === joined.data.playerId)?.isConnected).toBe(true);
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('keeps three clients on the same V6 phase sequence without leaking punishment result early', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'A' });
+      if (!created.ok) throw new Error(created.error.message);
+      const peers = await Promise.all(['B', 'C'].map(async (nickname) => {
+        const peer = await connect(url);
+        const joined = await emitAck<RoomMembership>(peer, 'room:join', { nickname, roomCode: created.data.room.code });
+        if (!joined.ok) throw new Error(joined.error.message);
+        return { peer, playerId: joined.data.playerId };
+      }));
+      await Promise.all([host, ...peers.map(({ peer }) => peer)].map((client) => emitAck<RoomView>(client, 'room:ready', {
+        roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
+      })));
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(started.ok).toBe(true);
+      const turn = await waitForGameState(host, (state) => state.phase === 'TURN');
+      if (!turn.turnPlayerId) throw new Error('Missing turn player');
+      const clientsByPlayer = new Map<string, ClientSocket<ServerToClientEvents, ClientToServerEvents>>([
+        [created.data.playerId, host],
+        ...peers.map(({ peer, playerId }) => [playerId, peer] as const),
+      ]);
+      const turnClient = clientsByPlayer.get(turn.turnPlayerId);
+      if (!turnClient) throw new Error('Missing turn client');
+      const played = await emitAck<GameView>(turnClient, 'game:playCards', { roomCode: created.data.room.code, cardIndexes: [0], requestId: randomUUID() });
+      expect(played.ok).toBe(true);
+      if (!played.ok) throw new Error('Play failed');
+      const nextTurn = played.data;
+      if (!nextTurn.turnPlayerId) throw new Error('Missing challenger');
+      const challengerClient = clientsByPlayer.get(nextTurn.turnPlayerId);
+      if (!challengerClient) throw new Error('Missing challenger client');
+      const challenged = await emitAck<GameView>(challengerClient, 'game:challenge', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(challenged).toMatchObject({ ok: true, data: { phase: 'CHALLENGE_CALLOUT', punishment: null } });
+
+      const revealStates = await Promise.all([host, ...peers.map(({ peer }) => peer)].map((client) => waitForGameState(client, (state) => state.phase === 'REVEAL')));
+      expect(new Set(revealStates.map((state) => state.sequence)).size).toBe(1);
+      expect(revealStates.every((state) => state.punishment === null)).toBe(true);
+
+      const trigger = await waitForGameState(host, (state) => state.phase === 'PUNISHMENT_TRIGGER');
+      expect(trigger.punishment).toBeNull();
+      const result = await waitForGameState(host, (state) => state.phase === 'PUNISHMENT_RESULT');
+      expect(result.punishment?.hit).toEqual(expect.any(Boolean));
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;
