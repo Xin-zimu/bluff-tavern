@@ -72,11 +72,11 @@ const targets = ['A', 'K', 'Q'] as const;
 
 const phaseDurations = {
   ROUND_START: 1_200,
-  CHALLENGE_CALLOUT: 650,
-  VERDICT: 850,
-  PUNISHMENT_INTRO: 900,
-  PUNISHMENT_TRIGGER: 550,
-  ROUND_END: 700,
+  CHALLENGE_CALLOUT: 800,
+  VERDICT: 1_000,
+  PUNISHMENT_INTRO: 1_050,
+  PUNISHMENT_TRIGGER: 700,
+  ROUND_END: 800,
 } as const;
 
 export class GameService {
@@ -236,7 +236,7 @@ export class GameService {
         this.enterPhase(game, 'PUNISHMENT_INTRO', phaseDurations.PUNISHMENT_INTRO);
         break;
       case 'PUNISHMENT_INTRO':
-        this.enterPhase(game, 'PUNISHMENT_TRIGGER', 550);
+        this.enterPhase(game, 'PUNISHMENT_TRIGGER', phaseDurations.PUNISHMENT_TRIGGER);
         break;
       case 'PUNISHMENT_TRIGGER':
         ({ eliminatedPlayerId } = this.publishPunishmentResult(game));
@@ -249,7 +249,7 @@ export class GameService {
             roundNumber: game.roundNumber,
           });
         }
-        this.enterPhase(game, 'PUNISHMENT_RESULT', game.pendingChallenge?.hit ? 1_500 : 1_100);
+        this.enterPhase(game, 'PUNISHMENT_RESULT', game.pendingChallenge?.hit ? 1_650 : 1_250);
         break;
       case 'PUNISHMENT_RESULT':
         this.enterPhase(game, 'ROUND_END', phaseDurations.ROUND_END);
@@ -477,7 +477,7 @@ export class GameService {
   }
 
   private revealDurationMs(game: InternalGame): number {
-    return 400 + (game.pendingChallenge?.revealedCards.length ?? 0) * 350;
+    return 500 + (game.pendingChallenge?.revealedCards.length ?? 0) * 400;
   }
 
   private turnDurationMs(game: InternalGame): number {

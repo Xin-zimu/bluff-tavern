@@ -7,6 +7,30 @@ import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
 import type { V6GameMode } from '@bluff-tavern/shared';
 
+function requestId(): string {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    return cryptoApi.randomUUID();
+  }
+
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    cryptoApi.getRandomValues(bytes);
+
+    bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+    bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+
+    const hex = Array.from(
+      bytes,
+      (byte) => byte.toString(16).padStart(2, '0'),
+    ).join('');
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function App() {
   const state = useSessionStore();
   const { setConnection, setNetworkOnline, updateRoom, leaveRoom: clearRoom, setNotice, setGame } = state;
@@ -75,43 +99,43 @@ export function App() {
   };
   const sendReady = (ready: boolean) => {
     if (!state.room) return;
-    socket.emit('room:ready', { roomCode: state.room.code, ready, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('room:ready', { roomCode: state.room.code, ready, requestId: requestId() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
   const updateSettings = (settings: { maxPlayers: number; gameMode: V6GameMode; turnDurationSeconds: number; eventEnabled: boolean; bulletCount: number | null }) => {
     if (!state.room) return;
-    socket.emit('room:updateSettings', { roomCode: state.room.code, ...settings, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('room:updateSettings', { roomCode: state.room.code, ...settings, requestId: requestId() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
   const kickPlayer = (targetPlayerId: string) => {
     if (!state.room) return;
-    socket.emit('room:kick', { roomCode: state.room.code, targetPlayerId, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('room:kick', { roomCode: state.room.code, targetPlayerId, requestId: requestId() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
   const startGame = () => {
     if (!state.room) return;
-    socket.emit('game:start', { roomCode: state.room.code, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('game:start', { roomCode: state.room.code, requestId: requestId() }, (result) => {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
   const playCards = (cardIndexes: number[]) => {
     if (!state.room) return;
-    socket.emit('game:playCards', { roomCode: state.room.code, cardIndexes, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('game:playCards', { roomCode: state.room.code, cardIndexes, requestId: requestId() }, (result) => {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
   const challenge = () => {
     if (!state.room) return;
-    socket.emit('game:challenge', { roomCode: state.room.code, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('game:challenge', { roomCode: state.room.code, requestId: requestId() }, (result) => {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
   const restartGame = () => {
     if (!state.room) return;
-    socket.emit('game:restart', { roomCode: state.room.code, requestId: crypto.randomUUID() }, (result) => {
+    socket.emit('game:restart', { roomCode: state.room.code, requestId: requestId() }, (result) => {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
@@ -121,7 +145,7 @@ export function App() {
   };
   const useItem = (itemId: NonNullable<typeof state.game>['items'][number]) => {
     if (!state.room) return;
-    socket.emit('game:useItem', { roomCode: state.room.code, itemId, requestId: crypto.randomUUID() }, (result) => { if (result.ok) setGame(result.data); else state.setNotice(result.error.message); });
+    socket.emit('game:useItem', { roomCode: state.room.code, itemId, requestId: requestId() }, (result) => { if (result.ok) setGame(result.data); else state.setNotice(result.error.message); });
   };
   const fullscreen = () => {
     if (!document.fullscreenElement) void document.documentElement.requestFullscreen().catch(() => state.setNotice('当前浏览器无法进入全屏'));
