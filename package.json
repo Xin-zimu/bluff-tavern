@@ -1,6 +1,6 @@
 {
   "name": "bluff-tavern",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.7.0",

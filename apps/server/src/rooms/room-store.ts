@@ -6,6 +6,7 @@ interface InternalPlayer extends PlayerView { socketId: string; sessionToken: st
 interface InternalRoom extends Omit<RoomView, 'players'> { players: InternalPlayer[] }
 export interface Departure { code: string; player: PlayerView; room: RoomView | null }
 export interface KickResult { room: RoomView; kickedPlayer: PlayerView; kickedSocketId: string }
+export interface RoomReconnect extends RoomMembership { previousSocketId: string | null }
 
 export class RoomError extends Error {
   constructor(public readonly code: string, message: string) { super(message); }
@@ -123,13 +124,14 @@ export class RoomStore {
     return null;
   }
 
-  resume(sessionToken: string, socketId: string): RoomMembership {
+  resume(sessionToken: string, socketId: string): RoomReconnect {
     for (const [code, room] of this.rooms) {
       const player = room.players.find((candidate) => candidate.sessionToken === sessionToken);
       if (!player) continue;
+      const previousSocketId = player.socketId !== socketId ? player.socketId : null;
       player.socketId = socketId;
       player.isConnected = true;
-      return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken };
+      return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken, previousSocketId };
     }
     throw new RoomError('SESSION_NOT_FOUND', '无法恢复会话');
   }
@@ -156,6 +158,10 @@ export class RoomStore {
 
   getSocketId(code: string, playerId: string): string | null {
     return this.rooms.get(code)?.players.find((player) => player.id === playerId)?.socketId ?? null;
+  }
+
+  isCurrentSocket(code: string, playerId: string, socketId: string): boolean {
+    return this.getSocketId(code, playerId) === socketId;
   }
 
   getView(code: string): RoomView {

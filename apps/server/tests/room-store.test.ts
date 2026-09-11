@@ -47,6 +47,9 @@ describe('RoomStore', () => {
     expect(disconnected?.room?.players.find((player) => player.id === guest.playerId)?.isConnected).toBe(false);
     const resumed = store.resume(guest.sessionToken, 'socket-c');
     expect(resumed.playerId).toBe(guest.playerId);
+    expect(resumed.previousSocketId).toBe('socket-b');
+    expect(store.isCurrentSocket(host.room.code, guest.playerId, 'socket-b')).toBe(false);
+    expect(store.isCurrentSocket(host.room.code, guest.playerId, 'socket-c')).toBe(true);
     expect(resumed.room.players.find((player) => player.id === guest.playerId)?.isConnected).toBe(true);
   });
 

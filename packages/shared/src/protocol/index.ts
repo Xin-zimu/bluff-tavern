@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MAX_CARDS_PER_PLAY, MAX_NICKNAME_LENGTH, MAX_PLAYERS, MIN_NICKNAME_LENGTH, MIN_PLAYERS, ROOM_CODE_LENGTH } from '../constants/index.js';
-import type { Ack, GameCue, GameSnapshot, GameView, RoomMembership, RoomPlayerEvent, RoomView } from '../types/index.js';
+import type { Ack, GameCue, GameSnapshot, GameView, RoomMembership, RoomPlayerEvent, RoomView, SessionResumeResult } from '../types/index.js';
 
 export const nicknameSchema = z.string().trim().min(MIN_NICKNAME_LENGTH).max(MAX_NICKNAME_LENGTH);
 export const roomCodeSchema = z.string().trim().toUpperCase().length(ROOM_CODE_LENGTH).regex(/^[2-9A-HJ-KM-NP-Z]+$/);
@@ -43,7 +43,7 @@ export interface ClientToServerEvents {
   'game:playCards': (payload: z.input<typeof playCardsSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:challenge': (payload: z.input<typeof challengeSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:restart': (payload: z.input<typeof restartGameSchema>, ack: (result: Ack<GameView>) => void) => void;
-  'session:resume': (payload: z.input<typeof resumeSessionSchema>, ack: (result: Ack<RoomMembership>) => void) => void;
+  'session:resume': (payload: z.input<typeof resumeSessionSchema>, ack: (result: Ack<SessionResumeResult>) => void) => void;
   'room:selectCharacter': (payload: z.input<typeof selectCharacterSchema>, ack: (result: Ack<RoomView>) => void) => void;
   'game:sendEmote': (payload: z.input<typeof sendEmoteSchema>, ack: (result: Ack<null>) => void) => void;
   'game:useItem': (payload: z.input<typeof useItemSchema>, ack: (result: Ack<GameView>) => void) => void;
@@ -55,6 +55,7 @@ export interface ServerToClientEvents {
   'room:playerJoined': (event: RoomPlayerEvent) => void;
   'room:playerLeft': (event: RoomPlayerEvent) => void;
   'room:kicked': (message: string) => void;
+  'session:replaced': (message: string) => void;
   'game:snapshot': (state: GameSnapshot) => void;
   'game:cue': (event: GameCue) => void;
   'game:state': (state: GameView) => void;

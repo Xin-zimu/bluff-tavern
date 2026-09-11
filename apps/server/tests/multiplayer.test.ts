@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { io as createClient, type Socket as ClientSocket } from 'socket.io-client';
-import type { Ack, ClientToServerEvents, GameView, RoomMembership, RoomView, ServerToClientEvents } from '@bluff-tavern/shared';
+import type { Ack, ClientToServerEvents, GameView, RoomMembership, RoomView, ServerToClientEvents, SessionResumeResult } from '@bluff-tavern/shared';
 import { createApp } from '../src/app.js';
 
 const clients: ClientSocket<ServerToClientEvents, ClientToServerEvents>[] = [];
@@ -62,7 +62,7 @@ describe('real Socket.IO multiplayer', () => {
       last.peer.disconnect();
       await new Promise((resolve) => setTimeout(resolve, 30));
       const restored = await connect(url);
-      const resumed = await emitAck<RoomMembership>(restored, 'session:resume', { sessionToken: last.membership.sessionToken });
+      const resumed = await emitAck<SessionResumeResult>(restored, 'session:resume', { sessionToken: last.membership.sessionToken });
       expect(resumed).toMatchObject({ ok: true, data: { playerId: last.membership.playerId } });
     } finally { clients.forEach((client) => client.disconnect()); clients.length = 0; await app.close(); }
   });
@@ -180,16 +180,61 @@ describe('real Socket.IO multiplayer', () => {
       await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
         roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
       })));
+      const guestSnapshot = waitForGameState(guest, (state) => state.roundNumber === 1 && state.hand.length === 5);
       const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
       expect(started.ok).toBe(true);
+      const beforeDisconnect = await guestSnapshot;
       guest.disconnect();
       await new Promise((resolve) => setTimeout(resolve, 30));
       const restored = await connect(url);
-      const resumed = await emitAck<RoomMembership>(restored, 'session:resume', { sessionToken: joined.data.sessionToken });
+      const resumed = await emitAck<SessionResumeResult>(restored, 'session:resume', { sessionToken: joined.data.sessionToken });
       expect(resumed).toMatchObject({ ok: true, data: { playerId: joined.data.playerId } });
       if (!resumed.ok) throw new Error('Resume failed');
       expect(resumed.data.room.players).toHaveLength(2);
       expect(resumed.data.room.players.find((player) => player.id === joined.data.playerId)?.isConnected).toBe(true);
+      expect(resumed.data.game?.roundNumber).toBe(beforeDisconnect.roundNumber);
+      expect(resumed.data.game?.hand).toEqual(beforeDisconnect.hand);
+      expect(resumed.data.game?.players.some((player) => player.playerId === joined.data.playerId && player.connected)).toBe(true);
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('replaces an older socket when the same session resumes elsewhere', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'Host' });
+      if (!created.ok) throw new Error(created.error.message);
+      const guest = await connect(url);
+      const joined = await emitAck<RoomMembership>(guest, 'room:join', { nickname: 'Guest', roomCode: created.data.room.code });
+      if (!joined.ok) throw new Error(joined.error.message);
+
+      const replaced = new Promise<string>((resolve) => guest.once('session:replaced', resolve));
+      const restored = await connect(url);
+      const resumed = await emitAck<SessionResumeResult>(restored, 'session:resume', { sessionToken: joined.data.sessionToken });
+      expect(resumed).toMatchObject({ ok: true, data: { playerId: joined.data.playerId, game: null } });
+      expect(await replaced).toBe('你的会话已在新连接中恢复');
+
+      const staleReady = await emitAck<RoomView>(guest, 'room:ready', {
+        roomCode: created.data.room.code,
+        ready: true,
+        requestId: randomUUID(),
+      });
+      expect(staleReady).toMatchObject({ ok: false, error: { code: 'INVALID_REQUEST' } });
+
+      const restoredReady = await emitAck<RoomView>(restored, 'room:ready', {
+        roomCode: created.data.room.code,
+        ready: true,
+        requestId: randomUUID(),
+      });
+      expect(restoredReady).toMatchObject({ ok: true });
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;

@@ -1,5 +1,5 @@
 import type { Server, Socket } from 'socket.io';
-import { challengeSchema, createRoomSchema, joinRoomSchema, kickPlayerSchema, leaveRoomSchema, playCardsSchema, readyRoomSchema, restartGameSchema, resumeSessionSchema, selectCharacterSchema, sendEmoteSchema, startGameSchema, updateRoomSettingsSchema, useItemSchema, type Ack, type ClientToServerEvents, type GameCue, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
+import { challengeSchema, createRoomSchema, joinRoomSchema, kickPlayerSchema, leaveRoomSchema, playCardsSchema, readyRoomSchema, restartGameSchema, resumeSessionSchema, selectCharacterSchema, sendEmoteSchema, startGameSchema, updateRoomSettingsSchema, useItemSchema, type Ack, type ClientToServerEvents, type GameCue, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SessionResumeResult, type SocketData } from '@bluff-tavern/shared';
 import { GameScheduler } from '../game/game-scheduler.js';
 import { GameService } from '../game/game-service.js';
 import { RoomError, RoomStore } from '../rooms/room-store.js';
@@ -79,7 +79,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('room:ready', (payload, ack) => {
     const parsed = readyRoomSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const requestKey = roomRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
     const cached = processedRoomRequests.get(requestKey);
     if (cached) return ack(cached);
@@ -98,7 +98,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('room:selectCharacter', (payload, ack) => {
     const parsed = selectCharacterSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     try {
       const room = rooms.selectCharacter(parsed.data.roomCode, socket.data.playerId!, parsed.data.characterId);
       io.to(room.code).emit('room:state', room);
@@ -110,14 +110,14 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('game:sendEmote', (payload, ack) => {
     const parsed = sendEmoteSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     io.to(parsed.data.roomCode).emit('game:emote', { playerId: socket.data.playerId!, emoteId: parsed.data.emoteId });
     ack({ ok: true, data: null });
   });
 
   socket.on('game:useItem', (payload, ack) => {
     const parsed = useItemSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const cached = processedGameRequests.get(gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId));
     if (cached) return ack(cached);
     try {
@@ -132,7 +132,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('room:updateSettings', (payload, ack) => {
     const parsed = updateRoomSettingsSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const requestKey = roomRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
     const cached = processedRoomRequests.get(requestKey);
     if (cached) return ack(cached);
@@ -159,7 +159,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('room:kick', (payload, ack) => {
     const parsed = kickPlayerSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const requestKey = roomRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
     const cached = processedRoomRequests.get(requestKey);
     if (cached) return ack(cached);
@@ -186,7 +186,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('game:start', (payload, ack) => {
     const parsed = startGameSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const key = gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
     const cached = processedGameRequests.get(key);
     if (cached) return ack(cached);
@@ -209,7 +209,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('game:playCards', (payload, ack) => {
     const parsed = playCardsSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const key = gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
     const cached = processedGameRequests.get(key);
     if (cached) return ack(cached);
@@ -232,7 +232,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('game:challenge', (payload, ack) => {
     const parsed = challengeSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const key = gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
     const cached = processedGameRequests.get(key);
     if (cached) return ack(cached);
@@ -260,7 +260,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
 
   socket.on('game:restart', (payload, ack) => {
     const parsed = restartGameSchema.safeParse(payload);
-    if (!parsed.success || !isCurrentMember(socket, parsed.data.roomCode)) return ack(invalid);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
     const key = gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
     const cached = processedGameRequests.get(key);
     if (cached) return ack(cached);
@@ -285,17 +285,26 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     if (!parsed.success) return ack(invalid);
     try {
       const result = rooms.resume(parsed.data.sessionToken, socket.id);
+      if (result.previousSocketId) replacePreviousSocket(io, result.previousSocketId, result.room.code);
       socket.data = { playerId: result.playerId, roomCode: result.room.code };
       void socket.join(result.room.code);
       games.updateConnections(result.room);
       io.to(result.room.code).emit('room:state', result.room);
+      let game: GameView | null = null;
       try {
+        game = games.getView(result.room.code, result.playerId);
         broadcastGameSnapshots(io, rooms, games, result.room.code);
       } catch {
         // Lobby has no game state.
       }
       logger.info({ event: 'player_reconnected', roomCode: result.room.code, playerId: result.playerId });
-      ack({ ok: true, data: result });
+      const data: SessionResumeResult = {
+        room: result.room,
+        playerId: result.playerId,
+        sessionToken: result.sessionToken,
+        game,
+      };
+      ack({ ok: true, data });
     } catch (error) {
       ack(failure(error));
     }
@@ -319,8 +328,18 @@ function leaveCurrent(io: GameServer, socket: GameSocket, rooms: RoomStore, sche
   }
 }
 
-function isCurrentMember(socket: GameSocket, roomCode: string): boolean {
-  return socket.data.roomCode === roomCode && socket.data.playerId !== undefined;
+function isCurrentMember(socket: GameSocket, rooms: RoomStore, roomCode: string): boolean {
+  return socket.data.roomCode === roomCode
+    && socket.data.playerId !== undefined
+    && rooms.isCurrentSocket(roomCode, socket.data.playerId, socket.id);
+}
+
+function replacePreviousSocket(io: GameServer, socketId: string, roomCode: string): void {
+  const previousSocket = io.sockets.sockets.get(socketId);
+  if (!previousSocket) return;
+  void previousSocket.leave(roomCode);
+  previousSocket.data = {};
+  previousSocket.emit('session:replaced', '你的会话已在新连接中恢复');
 }
 
 function disconnectCurrent(io: GameServer, socket: GameSocket, rooms: RoomStore, games: GameService, logger: AppLogger): void {

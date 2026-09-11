@@ -42,6 +42,10 @@ export interface RoomMembership {
   sessionToken: string;
 }
 
+export interface SessionResumeResult extends RoomMembership {
+  game: GameView | null;
+}
+
 export interface RoomPlayerEvent {
   roomCode: string;
   player: PlayerView;
