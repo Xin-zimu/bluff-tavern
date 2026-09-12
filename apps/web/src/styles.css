@@ -151,16 +151,28 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .verdict { display: grid; gap: 12px; }
 .verdict--bluff h2 { color: #ff756d; animation: verdict-shake .55s ease-out; }
 .verdict--truth h2 { color: #f2c777; }
-.revolver-beat { display: grid; place-items: center; gap: 16px; }
-.revolver { position: relative; width: min(62vw, 310px); height: 118px; filter: drop-shadow(0 16px 20px #0009); }
-.revolver__barrel { position: absolute; right: 16px; top: 45px; width: 66%; height: 24px; border-radius: 4px 12px 12px 4px; background: linear-gradient(#c5b7a4, #5e5752 45%, #d6c9ba); }
-.revolver__cylinder { position: absolute; left: 34px; top: 27px; width: 78px; height: 78px; border: 7px solid #b7aa99; border-radius: 50%; background: radial-gradient(circle, #322b27 0 16%, transparent 17% 100%), conic-gradient(from 0deg, #756c64, #d6c9ba, #665f58, #b8aa9d, #756c64); animation: cylinder-spin .9s linear infinite; }
-.revolver-beat.is-tense .revolver__cylinder { animation-play-state: paused; }
-.revolver-beat.is-tense .revolver { animation: trigger-hold .55s ease-in-out; }
+.revolver-beat { display: grid; place-items: center; gap: 14px; }
+.revolver-stage { position: relative; width: min(78vw, 560px); aspect-ratio: 1774 / 887; isolation: isolate; filter: drop-shadow(0 22px 26px #000b); transform-origin: 40% 58%; }
+.revolver-stage::before { content: ''; position: absolute; left: 18%; right: 4%; bottom: 11%; z-index: -1; height: 18%; border-radius: 50%; background: radial-gradient(ellipse, rgba(0,0,0,.6), transparent 72%); filter: blur(8px); }
+.revolver-stage__gun { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: 33% 58%; }
+.revolver-stage__flash { position: absolute; left: 77%; top: 25%; width: 38%; height: 48%; object-fit: contain; opacity: 0; transform: translateX(-12%) scale(.7); transform-origin: left center; mix-blend-mode: screen; filter: drop-shadow(0 0 18px rgba(255,182,68,.82)); }
+.revolver-stage__cylinder { position: absolute; left: 36.5%; top: 31.5%; width: 13.4%; aspect-ratio: 1; border-radius: 50%; animation: cylinder-spin .78s linear infinite; }
+.revolver-stage__cylinder span { position: absolute; left: 44%; top: 7%; width: 12%; height: 18%; border-radius: 999px; background: rgba(255,234,178,.54); box-shadow: 0 0 7px rgba(242,199,119,.46); transform-origin: 50% 240%; opacity: .58; }
+.revolver-stage__cylinder span:nth-child(2) { transform: rotate(60deg); }
+.revolver-stage__cylinder span:nth-child(3) { transform: rotate(120deg); }
+.revolver-stage__cylinder span:nth-child(4) { transform: rotate(180deg); }
+.revolver-stage__cylinder span:nth-child(5) { transform: rotate(240deg); }
+.revolver-stage__cylinder span:nth-child(6) { transform: rotate(300deg); }
+.revolver-stage__cylinder span.is-current { background: #fff0b4; opacity: 1; box-shadow: 0 0 14px rgba(255,218,113,.92), 0 0 28px rgba(255,125,71,.38); }
+.revolver-beat.is-tense .revolver-stage__cylinder { animation: cylinder-lock .34s cubic-bezier(.2,.8,.24,1) both; }
+.revolver-beat.is-tense .revolver-stage { animation: trigger-hold .72s cubic-bezier(.2,.9,.2,1) both; }
+.revolver-stage.is-hit .revolver-stage__gun { animation: gun-recoil .3s cubic-bezier(.15,.85,.28,1) both; }
+.revolver-stage.is-hit .revolver-stage__flash { animation: muzzle-blast .48s ease-out both; }
+.revolver-stage.is-dry .revolver-stage__flash { animation: dry-smoke .72s ease-out both; filter: grayscale(.7) brightness(.7) drop-shadow(0 0 10px rgba(190,180,160,.25)); }
 .punishment-result { display: grid; gap: 10px; }
 .punishment-result.is-hit::before { content: ''; position: fixed; inset: 0; background: white; opacity: 0; animation: white-flash .28s ease-out; pointer-events: none; }
-.punishment-result.is-hit h2 { color: #ff756d; }
-.punishment-result.is-dry h2 { color: #f2c777; }
+.punishment-result.is-hit .revolver-beat h2 { color: #ff756d; }
+.punishment-result.is-dry .revolver-beat h2 { color: #f2c777; }
 .cinematic--punishment_result.cinematic--hit .cinematic__panel { animation: table-shake .42s ease-out; }
 .cinematic-victory { display: grid; place-items: center; gap: 12px; }
 .cinematic-victory p { color: #f2c777; font-family: Georgia, "Songti SC", serif; font-size: clamp(1.6rem, 6vw, 3.2rem); text-shadow: 0 3px 14px #000; }
@@ -188,9 +200,30 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 @keyframes cylinder-spin {
   to { transform: rotate(360deg); }
 }
+@keyframes cylinder-lock {
+  0% { transform: rotate(-65deg); }
+  76% { transform: rotate(10deg); }
+  100% { transform: rotate(0); }
+}
 @keyframes trigger-hold {
-  0%, 48% { transform: translateY(0) rotate(0); }
-  70% { transform: translateY(3px) rotate(-2deg); }
+  0%, 48% { transform: translateY(0) rotate(0) scale(1); }
+  72% { transform: translateY(5px) rotate(-1.4deg) scale(.992); }
+  100% { transform: translateY(0) rotate(0) scale(1); }
+}
+@keyframes gun-recoil {
+  0% { transform: translateX(0) rotate(0); }
+  34% { transform: translateX(-18px) rotate(-2.4deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+@keyframes muzzle-blast {
+  0% { opacity: 0; transform: translateX(-16%) scale(.38); }
+  12% { opacity: 1; transform: translateX(-4%) scale(1.04); }
+  100% { opacity: 0; transform: translateX(10%) scale(1.24); }
+}
+@keyframes dry-smoke {
+  0% { opacity: 0; transform: translateX(-12%) scale(.42); }
+  24% { opacity: .34; transform: translateX(-2%) scale(.7); }
+  100% { opacity: 0; transform: translateX(8%) scale(.88); }
 }
 @keyframes white-flash {
   0% { opacity: .86; }
@@ -201,8 +234,10 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .app-shell--low-power .deal-line.is-dealing span,
 .app-shell--low-power .callout,
 .app-shell--low-power .cinematic__panel,
-.app-shell--low-power .revolver__cylinder,
-.app-shell--low-power .revolver-beat.is-tense .revolver,
+.app-shell--low-power .revolver-stage,
+.app-shell--low-power .revolver-stage__gun,
+.app-shell--low-power .revolver-stage__flash,
+.app-shell--low-power .revolver-stage__cylinder,
 .app-shell--low-power .verdict--bluff h2 { animation: none; }
 
 @media (max-width: 520px) {
@@ -213,7 +248,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
   .item-button img { width: 48px; height: 48px; }
   .challenge-result { padding-inline: 18px; }
   .cinematic__panel { min-height: 238px; }
-  .revolver { width: min(76vw, 270px); }
+  .revolver-stage { width: min(82vw, 390px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -226,6 +261,9 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
   .callout,
   .verdict--bluff h2,
   .revolver,
-  .revolver__cylinder,
+  .revolver-stage,
+  .revolver-stage__gun,
+  .revolver-stage__flash,
+  .revolver-stage__cylinder,
   .punishment-result.is-hit::before { animation: none !important; }
 }

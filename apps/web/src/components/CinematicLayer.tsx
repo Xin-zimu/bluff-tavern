@@ -1,5 +1,6 @@
 import type { CardRank, GamePhase, GameView, RoomView } from '@bluff-tavern/shared';
 import type { CSSProperties } from 'react';
+import { CINEMATIC_ART } from '../art';
 
 interface CinematicLayerProps {
   game: GameView;
@@ -42,8 +43,8 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
       {game.phase === 'CHALLENGE_CALLOUT' && <Callout challenger={challenger} challenged={challenged} />}
       {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} progress={progress} />}
       {game.phase === 'VERDICT' && <Verdict game={game} punished={punished} />}
-      {game.phase === 'PUNISHMENT_INTRO' && <RevolverBeat title={punished} subtitle="弹巢旋转" />}
-      {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle="扣动扳机" tense />}
+      {game.phase === 'PUNISHMENT_INTRO' && <RevolverBeat title={punished} subtitle="弹巢旋转" chamber={null} />}
+      {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle="扣动扳机" chamber={null} tense />}
       {game.phase === 'PUNISHMENT_RESULT' && <PunishmentResult result={result} punished={punished} />}
       {game.phase === 'ROUND_END' && <h2>清理牌桌</h2>}
       {game.phase === 'GAME_OVER' && <Victory winner={winner} />}
@@ -90,12 +91,15 @@ function Verdict({ game, punished }: { game: GameView; punished: string }) {
   </div>;
 }
 
-function RevolverBeat({ title, subtitle, tense = false }: { title: string; subtitle: string; tense?: boolean }) {
+function RevolverBeat({ title, subtitle, chamber, tense = false, result }: { title: string; subtitle: string; chamber?: number | null; tense?: boolean; result?: GameView['punishment'] }) {
   return <div className={`revolver-beat ${tense ? 'is-tense' : ''}`}>
     <h2>{title}</h2>
-    <div className="revolver" aria-hidden="true">
-      <span className="revolver__barrel" />
-      <span className="revolver__cylinder" />
+    <div className={`revolver-stage ${result?.hit ? 'is-hit' : result ? 'is-dry' : ''}`} aria-hidden="true">
+      <img className="revolver-stage__gun" src={CINEMATIC_ART.revolver} alt="" />
+      <img className="revolver-stage__flash" src={CINEMATIC_ART.muzzleFlashSmoke} alt="" />
+      <div className="revolver-stage__cylinder">
+        {Array.from({ length: 6 }, (_, index) => <span key={index} className={chamber === index ? 'is-current' : ''} />)}
+      </div>
     </div>
     <p>{subtitle}</p>
   </div>;
@@ -103,8 +107,7 @@ function RevolverBeat({ title, subtitle, tense = false }: { title: string; subti
 
 function PunishmentResult({ result, punished }: { result: GameView['punishment']; punished: string }) {
   return <div className={`punishment-result ${result?.hit ? 'is-hit' : 'is-dry'}`}>
-    <h2>{result?.hit ? '中弹淘汰' : '空枪'}</h2>
-    <p>{result?.hit ? `${punished} 已淘汰` : `${punished} 暂时安全`}</p>
+    <RevolverBeat title={result?.hit ? '砰！' : '咔哒'} subtitle={result?.hit ? `${punished} 已淘汰` : `${punished} 暂时安全`} chamber={result?.chamber ?? null} result={result} />
   </div>;
 }
 

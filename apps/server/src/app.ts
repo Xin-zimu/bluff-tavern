@@ -46,7 +46,7 @@ async function sendWebFile(reply: FastifyReply, filePath: string, cacheControl: 
 export async function createApp(config: ServerConfig) {
   const app = Fastify({ logger: { level: config.logLevel } });
   await app.register(cors, { origin: config.clientOrigin });
-  app.get('/health', () => ({ status: 'ok', version: '6.1.0', timestamp: Date.now() }));
+  app.get('/health', () => ({ status: 'ok', version: '6.2.0', timestamp: Date.now() }));
   if (config.webRoot) {
     const webRoot = resolve(config.webRoot);
     const webRootPrefix = `${webRoot}${sep}`;

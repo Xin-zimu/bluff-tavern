@@ -26,19 +26,56 @@ function tone(frequency: number, duration = 0.16, gainValue = 0.045, type: Oscil
   oscillator.stop(audio.currentTime + duration);
 }
 
-function noise(duration = 0.14, gainValue = 0.04): void {
+function noise(duration = 0.14, gainValue = 0.04, filterFrequency?: number): void {
   const audio = getContext();
   if (!audio) return;
   const buffer = audio.createBuffer(1, Math.max(1, Math.floor(audio.sampleRate * duration)), audio.sampleRate);
   const channel = buffer.getChannelData(0);
-  for (let index = 0; index < channel.length; index += 1) channel[index] = (Math.random() * 2 - 1) * (1 - index / channel.length);
+  for (let index = 0; index < channel.length; index += 1) {
+    const progress = index / channel.length;
+    channel[index] = (Math.random() * 2 - 1) * (1 - progress) ** 1.8;
+  }
   const source = audio.createBufferSource();
   const gain = audio.createGain();
+  const filter = audio.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(filterFrequency ?? 2_600, audio.currentTime);
   source.buffer = buffer;
   gain.gain.setValueAtTime(gainValue, audio.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
-  source.connect(gain).connect(audio.destination);
+  source.connect(filter).connect(gain).connect(audio.destination);
   source.start();
+}
+
+function cardFlip(): void {
+  tone(720, 0.035, 0.018, 'triangle');
+  setTimeout(() => tone(420, 0.055, 0.016, 'triangle'), 42);
+}
+
+function cylinderRattle(): void {
+  [0, 72, 144, 216].forEach((delay, index) => {
+    setTimeout(() => {
+      tone(190 - index * 16, 0.055, 0.022, 'square');
+      noise(0.025, 0.014, 3_400);
+    }, delay);
+  });
+}
+
+function triggerClick(): void {
+  tone(76, 0.12, 0.025, 'square');
+  setTimeout(() => tone(310, 0.035, 0.028, 'square'), 130);
+}
+
+function dryFire(): void {
+  tone(260, 0.035, 0.038, 'square');
+  setTimeout(() => tone(410, 0.055, 0.024, 'triangle'), 92);
+}
+
+function gunshot(): void {
+  noise(0.28, 0.095, 1_450);
+  tone(58, 0.38, 0.075, 'sawtooth');
+  setTimeout(() => noise(0.2, 0.045, 650), 80);
+  setTimeout(() => tone(118, 0.2, 0.032, 'sawtooth'), 95);
 }
 
 const phaseSound: Partial<Record<GamePhase, (snapshot: GameView) => void>> = {
@@ -47,29 +84,27 @@ const phaseSound: Partial<Record<GamePhase, (snapshot: GameView) => void>> = {
     setTimeout(() => tone(495, 0.16, 0.035, 'triangle'), 120);
   },
   CHALLENGE_CALLOUT: () => {
-    noise(0.09, 0.06);
+    noise(0.09, 0.06, 2_100);
     tone(95, 0.26, 0.06, 'sawtooth');
   },
   REVEAL: () => {
-    tone(560, 0.08, 0.025, 'triangle');
+    cardFlip();
   },
   VERDICT: (snapshot) => {
     tone(snapshot.challenge?.wasBluff ? 130 : 620, 0.28, 0.045, snapshot.challenge?.wasBluff ? 'sawtooth' : 'triangle');
+    if (snapshot.challenge?.wasBluff) setTimeout(() => noise(0.08, 0.035, 1_900), 80);
   },
   PUNISHMENT_INTRO: () => {
-    tone(180, 0.22, 0.035, 'sawtooth');
-    setTimeout(() => tone(150, 0.22, 0.03, 'sawtooth'), 150);
+    cylinderRattle();
   },
   PUNISHMENT_TRIGGER: () => {
-    tone(72, 0.35, 0.04, 'square');
+    triggerClick();
   },
   PUNISHMENT_RESULT: (snapshot) => {
     if (snapshot.punishment?.hit) {
-      noise(0.18, 0.08);
-      tone(62, 0.32, 0.07, 'sawtooth');
+      gunshot();
     } else {
-      tone(260, 0.08, 0.035, 'square');
-      setTimeout(() => tone(410, 0.12, 0.025, 'triangle'), 160);
+      dryFire();
     }
   },
   GAME_OVER: () => {

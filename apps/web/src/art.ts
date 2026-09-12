@@ -46,3 +46,8 @@ export const ITEM_ART: Record<ItemId, string> = {
   TAVERN_MUG: '/assets/items/wooden_mug.png',
   POCKET_WATCH: '/assets/items/pocket_watch.png',
 };
+
+export const CINEMATIC_ART = {
+  revolver: '/assets/cinematics/revolver_side_v1.png',
+  muzzleFlashSmoke: '/assets/cinematics/muzzle_flash_smoke_v1.png',
+} as const;
