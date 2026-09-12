@@ -5,7 +5,7 @@ import { playGamePhaseSound } from '../audio/game-audio-manager';
 import { playUiTone } from '../audio/ui-sounds';
 import { CHARACTER_ART, ITEM_ART, ITEM_NAMES, characterImage } from '../art';
 
-export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestart, onFullscreen, onUseItem, onShare }: { room: RoomView; game: GameView; playerId: string | null; onPlay: (indexes: number[]) => void; onChallenge: () => void; onRestart: () => void; onFullscreen: () => void; onUseItem: (itemId: GameView['items'][number]) => void; onShare: () => void }) {
+export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, reduceMotion, onToggleAudio, onToggleLowPower, onToggleReduceMotion, onPlay, onChallenge, onRestart, onFullscreen, onUseItem, onShare }: { room: RoomView; game: GameView; playerId: string | null; audioMuted: boolean; lowPowerActive: boolean; reduceMotion: boolean; onToggleAudio: () => void; onToggleLowPower: () => void; onToggleReduceMotion: () => void; onPlay: (indexes: number[]) => void; onChallenge: () => void; onRestart: () => void; onFullscreen: () => void; onUseItem: (itemId: GameView['items'][number]) => void; onShare: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [localNow, setLocalNow] = useState(() => Date.now());
   const clockRef = useRef({ sequence: game.sequence, localReceivedAt: Date.now(), serverNow: game.serverNow });
@@ -21,7 +21,7 @@ export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestar
   }, [room.players, game.players, game.alivePlayerIds, playerId]);
   const winner = players.find((player) => player.id === game.winnerId);
   const toggle = (index: number) => setSelected((current) => current.includes(index) ? current.filter((item) => item !== index) : current.length < 3 ? [...current, index] : current);
-  const play = () => { playUiTone(420); onPlay(selected); setSelected([]); };
+  const play = () => { if (!audioMuted) playUiTone(420); onPlay(selected); setSelected([]); };
   useEffect(() => {
     clockRef.current = { sequence: game.sequence, localReceivedAt: Date.now(), serverNow: game.serverNow };
     setLocalNow(Date.now());
@@ -34,15 +34,20 @@ export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestar
   useEffect(() => {
     if (playedAudioSequence.current === game.sequence) return;
     playedAudioSequence.current = game.sequence;
-    playGamePhaseSound(game);
-  }, [game]);
+    playGamePhaseSound(game, audioMuted);
+  }, [game, audioMuted]);
   const syncedNow = clockRef.current.serverNow + (localNow - clockRef.current.localReceivedAt);
   const secondsLeft = game.phaseEndsAt ? Math.max(0, Math.ceil((game.phaseEndsAt - syncedNow) / 1_000)) : null;
   return <main className="game-screen">
     <p className="rotate-hint">为获得最佳牌桌视野，请横屏游玩</p>
     <header className="game-header"><div><p className="eyebrow">第 {game.roundNumber} 轮 · {game.gameMode === 'QUICK' ? '快速 7 秒' : '经典 15 秒'} · #{game.sequence}</p><h1>目标牌：{game.targetCard}</h1></div><div className="game-header-actions">{secondsLeft !== null && <span className="phase-clock">{secondsLeft}s</span>}<span className="discard">已出 {game.discardCount} 张</span><button className="fullscreen-button" onClick={onFullscreen}>全屏</button></div></header>
-    <section className="panel game-table"><h2>{isGameOver ? '本局结束' : game.phase === 'VERDICT' ? '质疑结果' : isTurn ? (game.mustChallenge ? '必须质疑上一手' : '轮到你出牌或质疑') : game.phase === 'TURN' ? `等待 ${players.find((player) => player.id === game.turnPlayerId)?.nickname ?? '玩家'} 操作` : '牌局演出中'}</h2>
-      <ul className={`game-players game-players--${players.length}`}>{players.map((player) => <li key={player.id} className={`${player.id === game.turnPlayerId ? 'active-turn ' : ''}${player.id === playerId ? 'self-seat ' : ''}${!player.alive ? 'is-eliminated' : ''}`}>
+    <div className="cinematic-controls" aria-label="演出设置">
+      <button type="button" aria-pressed={!audioMuted} onClick={onToggleAudio}>{audioMuted ? '音效关' : '音效开'}</button>
+      <button type="button" aria-pressed={lowPowerActive} onClick={onToggleLowPower}>{lowPowerActive ? '性能省' : '性能满'}</button>
+      <button type="button" aria-pressed={reduceMotion} onClick={onToggleReduceMotion}>{reduceMotion ? '动画少' : '动画全'}</button>
+    </div>
+    <section className={`panel game-table${game.phase === 'PUNISHMENT_RESULT' && game.punishment?.hit ? ' game-table--elimination' : ''}${isGameOver ? ' game-table--victory' : ''}`}><h2>{isGameOver ? '本局结束' : game.phase === 'VERDICT' ? '质疑结果' : isTurn ? (game.mustChallenge ? '必须质疑上一手' : '轮到你出牌或质疑') : game.phase === 'TURN' ? `等待 ${players.find((player) => player.id === game.turnPlayerId)?.nickname ?? '玩家'} 操作` : '牌局演出中'}</h2>
+      <ul className={`game-players game-players--${players.length}`}>{players.map((player) => <li key={player.id} className={`${player.id === game.turnPlayerId ? 'active-turn ' : ''}${player.id === playerId ? 'self-seat ' : ''}${game.punishment?.eliminatedPlayerId === player.id ? 'is-newly-eliminated ' : ''}${!player.alive ? 'is-eliminated' : ''}`}>
         {player.characterId && <div className="character-portrait character-portrait--game" aria-hidden="true"><img src={characterImage(player.characterId, !player.alive ? 'eliminated' : game.phase === 'GAME_OVER' && player.id === game.winnerId ? 'victory' : 'idle')} alt="" /></div>}
         <span className="seat-copy"><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><small>{player.characterId ? CHARACTER_ART[player.characterId].name : '未选角色'} · {player.alive ? `${player.cards} 张手牌` : '已淘汰'}</small></span>
       </li>)}</ul>
@@ -52,7 +57,7 @@ export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestar
     {game.items.length > 0 && <div className="item-bar" aria-label="可用道具">{game.items.map((item) => <button key={item} className="item-button" onClick={() => onUseItem(item)} title={ITEM_NAMES[item]}>
       <img src={ITEM_ART[item]} alt="" loading="lazy" /><span>{ITEM_NAMES[item]}</span>
     </button>)}</div>}
-    {canChallenge && <button className="button button--secondary button--art-challenge play-button" onClick={() => { playUiTone(180); onChallenge(); }}>质疑上一手</button>}
+    {canChallenge && <button className="button button--secondary button--art-challenge play-button" onClick={() => { if (!audioMuted) playUiTone(180); onChallenge(); }}>质疑上一手</button>}
     {game.challengeResult && <div className="challenge-result" aria-live="polite"><img src="/assets/effects/challenge_burst.png" alt="" aria-hidden="true" /><p>翻牌：{game.challengeResult.revealedCards.join('、')}；{game.challengeResult.wasBluff ? '上一位玩家撒谎' : '质疑失败'}，失败者：{players.find((player) => player.id === game.challengeResult?.failedPlayerId)?.nickname}</p></div>}
     {game.punishment && <p className="future-note">轮盘第 {game.punishment.chamber + 1} 弹巢：{game.punishment.hit ? '中弹淘汰' : '空枪，继续游戏'}。</p>}
     <CinematicLayer room={room} game={game} now={syncedNow} />
@@ -61,7 +66,7 @@ export function GameScreen({ room, game, playerId, onPlay, onChallenge, onRestar
       <p className="eyebrow">酒馆最终胜者</p>
       {winner?.characterId && <div className="character-portrait victory-portrait" aria-hidden="true"><img src={characterImage(winner.characterId, 'victory')} alt="" /></div>}
       <h2>{winner?.nickname}</h2>
-      {game.summary && <><p className="victory-summary">{game.summary.playerCount} 人局 · {game.summary.durationSeconds} 秒 · 质疑 {game.summary.challengeCount} 次（成功 {game.summary.successfulChallenges}）</p><button className="fullscreen-button" onClick={onShare}>分享结果</button></>}
+      {game.summary && <><div className="victory-stats"><span><strong>{game.summary.playerCount}</strong>人局</span><span><strong>{game.summary.durationSeconds}</strong>秒</span><span><strong>{game.summary.challengeCount}</strong>次质疑</span><span><strong>{game.summary.successfulChallenges}</strong>次成功</span></div><p className="victory-summary">淘汰顺序：{game.summary.eliminationOrder.map((id) => players.find((player) => player.id === id)?.nickname ?? '玩家').join(' → ') || '无人淘汰'}</p><button className="fullscreen-button" onClick={onShare}>分享结果</button></>}
       {room.hostPlayerId === playerId && <button className="button button--primary button--art-start play-button" onClick={onRestart}>再来一局</button>}
     </section>}
   </main>;

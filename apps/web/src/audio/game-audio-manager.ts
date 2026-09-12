@@ -50,6 +50,7 @@ function noise(duration = 0.14, gainValue = 0.04, filterFrequency?: number): voi
 function cardFlip(): void {
   tone(720, 0.035, 0.018, 'triangle');
   setTimeout(() => tone(420, 0.055, 0.016, 'triangle'), 42);
+  setTimeout(() => noise(0.035, 0.012, 4_200), 64);
 }
 
 function cylinderRattle(): void {
@@ -89,6 +90,8 @@ const phaseSound: Partial<Record<GamePhase, (snapshot: GameView) => void>> = {
   },
   REVEAL: () => {
     cardFlip();
+    setTimeout(cardFlip, 220);
+    setTimeout(cardFlip, 440);
   },
   VERDICT: (snapshot) => {
     tone(snapshot.challenge?.wasBluff ? 130 : 620, 0.28, 0.045, snapshot.challenge?.wasBluff ? 'sawtooth' : 'triangle');
@@ -111,9 +114,11 @@ const phaseSound: Partial<Record<GamePhase, (snapshot: GameView) => void>> = {
     tone(392, 0.16, 0.035, 'triangle');
     setTimeout(() => tone(494, 0.18, 0.035, 'triangle'), 160);
     setTimeout(() => tone(659, 0.24, 0.035, 'triangle'), 340);
+    setTimeout(() => noise(0.22, 0.025, 3_200), 420);
   },
 };
 
-export function playGamePhaseSound(snapshot: GameView): void {
+export function playGamePhaseSound(snapshot: GameView, muted = false): void {
+  if (muted) return;
   phaseSound[snapshot.phase]?.(snapshot);
 }

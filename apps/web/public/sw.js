@@ -1,4 +1,4 @@
-const CACHE = 'bluff-tavern-v6.2-core1';
+const CACHE = 'bluff-tavern-v6.3-core1';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.add('/')));

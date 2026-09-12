@@ -41,7 +41,7 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
       <p className="cinematic__phase">{phaseLabels[game.phase]}</p>
       {game.phase === 'ROUND_START' && <RoundIntro game={game} progress={progress} />}
       {game.phase === 'CHALLENGE_CALLOUT' && <Callout challenger={challenger} challenged={challenged} />}
-      {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} progress={progress} />}
+      {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} targetRank={game.targetRank} progress={progress} />}
       {game.phase === 'VERDICT' && <Verdict game={game} punished={punished} />}
       {game.phase === 'PUNISHMENT_INTRO' && <RevolverBeat title={punished} subtitle="弹巢旋转" chamber={null} />}
       {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle="扣动扳机" chamber={null} tense />}
@@ -71,11 +71,12 @@ function Callout({ challenger, challenged }: { challenger: string; challenged: s
   </div>;
 }
 
-function Reveal({ cards, progress }: { cards: CardRank[]; progress: number }) {
-  return <div className="reveal-cards">
+function Reveal({ cards, targetRank, progress }: { cards: CardRank[]; targetRank: GameView['targetRank']; progress: number }) {
+  return <div className={`reveal-cards ${progress > 0.84 ? 'is-settled' : ''}`}>
     {cards.map((card, index) => {
       const visible = progress >= (index + 1) / Math.max(cards.length, 1) - 0.12;
-      return <div key={`${card}-${index}`} className={`reveal-card ${visible ? 'is-flipped' : ''}`}>
+      const honest = card === targetRank || card === 'JOKER';
+      return <div key={`${card}-${index}`} className={`reveal-card reveal-card--${card.toLowerCase()} ${visible ? 'is-flipped' : ''} ${honest ? 'is-honest' : 'is-bluff'}`} style={{ '--card-index': index } as CSSProperties}>
         <span className="reveal-card__back">?</span>
         <span className="reveal-card__front">{card}</span>
       </div>;
@@ -86,6 +87,7 @@ function Reveal({ cards, progress }: { cards: CardRank[]; progress: number }) {
 function Verdict({ game, punished }: { game: GameView; punished: string }) {
   const wasBluff = game.challenge?.wasBluff;
   return <div className={`verdict ${wasBluff ? 'verdict--bluff' : 'verdict--truth'}`}>
+    <span className="verdict__seal" aria-hidden="true" />
     <h2>{wasBluff ? '谎言！' : '质疑失败'}</h2>
     <p>{punished} 受罚</p>
   </div>;

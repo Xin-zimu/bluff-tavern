@@ -7,6 +7,21 @@ import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
 import type { V6GameMode } from '@bluff-tavern/shared';
 
+type MotionPreference = 'system' | 'full' | 'reduced';
+
+function readBooleanPreference(key: string): boolean {
+  return localStorage.getItem(key) === 'true';
+}
+
+function readMotionPreference(): MotionPreference {
+  const stored = localStorage.getItem('bluff-tavern.motion-preference');
+  return stored === 'full' || stored === 'reduced' ? stored : 'system';
+}
+
+function readSystemReducedMotion(): boolean {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
 function requestId(): string {
   const cryptoApi = globalThis.crypto;
   if (typeof cryptoApi?.randomUUID === 'function') {
@@ -35,7 +50,21 @@ export function App() {
   const state = useSessionStore();
   const { setConnection, setNetworkOnline, updateRoom, leaveRoom: clearRoom, setNotice, setGame } = state;
   const [busy, setBusy] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(() => readBooleanPreference('bluff-tavern.audio-muted'));
+  const [manualLowPower, setManualLowPower] = useState(() => readBooleanPreference('bluff-tavern.low-power'));
+  const [motionPreference, setMotionPreference] = useState<MotionPreference>(() => readMotionPreference());
+  const [systemReducedMotion, setSystemReducedMotion] = useState(() => readSystemReducedMotion());
   const recordedSummary = useRef<string | null>(null);
+  useEffect(() => localStorage.setItem('bluff-tavern.audio-muted', String(audioMuted)), [audioMuted]);
+  useEffect(() => localStorage.setItem('bluff-tavern.low-power', String(manualLowPower)), [manualLowPower]);
+  useEffect(() => localStorage.setItem('bluff-tavern.motion-preference', motionPreference), [motionPreference]);
+  useEffect(() => {
+    const query = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return;
+    const update = () => setSystemReducedMotion(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
   useEffect(() => {
     const summary = state.game?.summary;
     if (!summary || !state.playerId) { recordedSummary.current = null; return; }
@@ -173,14 +202,17 @@ export function App() {
     else void navigator.clipboard?.writeText(text).then(() => state.setNotice('战报已复制'));
   };
   const lowPerformance = navigator.hardwareConcurrency <= 4 || ('deviceMemory' in navigator && (navigator as Navigator & { deviceMemory?: number }).deviceMemory !== undefined && (navigator as Navigator & { deviceMemory?: number }).deviceMemory! <= 4);
+  const lowPowerActive = lowPerformance || manualLowPower;
+  const reduceMotion = motionPreference === 'reduced' || (motionPreference === 'system' && systemReducedMotion);
+  const forceMotion = motionPreference === 'full';
   const screen = state.room && state.game ? 'game' : state.room ? 'lobby' : 'home';
 
-  return <div className={`app-shell app-shell--${screen}${state.game?.phase === 'GAME_OVER' ? ' app-shell--victory' : ''}${lowPerformance ? ' app-shell--low-power' : ''}`}>
+  return <div className={`app-shell app-shell--${screen}${state.game?.phase === 'GAME_OVER' ? ' app-shell--victory' : ''}${lowPowerActive ? ' app-shell--low-power' : ''}${reduceMotion ? ' app-shell--reduce-motion' : ''}${forceMotion ? ' app-shell--force-motion' : ''}`}>
     <ConnectionBadge status={state.connection} networkOnline={state.networkOnline} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
-    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
+    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} audioMuted={audioMuted} lowPowerActive={lowPowerActive} reduceMotion={reduceMotion} onToggleAudio={() => setAudioMuted((value) => !value)} onToggleLowPower={() => setManualLowPower((value) => !value)} onToggleReduceMotion={() => setMotionPreference(() => reduceMotion ? 'full' : 'reduced')} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V6.2 · 原创酒馆视觉 · 不含第三方游戏版权素材</footer>
+    <footer>V6.3 · 原创酒馆视觉 · 不含第三方游戏版权素材</footer>
   </div>;
 }
