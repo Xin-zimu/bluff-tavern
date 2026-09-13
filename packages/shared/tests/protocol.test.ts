@@ -21,6 +21,16 @@ describe('V6 protocol schemas', () => {
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'CUSTOM', requestId: crypto.randomUUID() }).success).toBe(false);
   });
 
+  it('accepts V7 extension flags without enabling new game modes', () => {
+    expect(updateRoomSettingsSchema.safeParse({
+      roomCode: 'ABC234',
+      maxPlayers: 4,
+      gameMode: 'CLASSIC',
+      requestId: crypto.randomUUID(),
+      v7: { itemsEnabled: true, tavernEventsEnabled: true, characterAbilitiesEnabled: true },
+    }).success).toBe(true);
+  });
+
   it('requires one to three unique card indexes', () => {
     expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 1, 2], requestId: crypto.randomUUID() }).success).toBe(true);
     expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 0], requestId: crypto.randomUUID() }).success).toBe(false);

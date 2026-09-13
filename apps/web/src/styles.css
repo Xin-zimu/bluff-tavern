@@ -57,6 +57,21 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .ready-mark { margin-left: auto; font-size: .65rem; color: #9ed18c; border: 1px solid #527845; padding: 3px 5px; }
 .settings-control { display: flex; justify-content: space-between; align-items: center; margin: 16px 0; color: #c8b9a1; }
 .settings-control select { min-height: 38px; border: 1px solid #6e625b; color: #f2c777; background: #120d0b; padding: 0 10px; }
+.feature-switches { display: grid; gap: 8px; margin: 14px 0 16px; padding: 12px; border: 1px solid rgba(166,124,61,.34); border-radius: 6px; background: rgba(0,0,0,.16); }
+.feature-switch { min-height: 38px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin: 0; color: #c8b9a1; cursor: pointer; }
+.feature-switch input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+.feature-switch input:focus-visible + .feature-switch__toggle { outline: 2px solid #f2c777; outline-offset: 3px; }
+.feature-switch__toggle, .feature-switch__status { width: 42px; height: 24px; border: 1px solid #6e625b; border-radius: 999px; background: #120d0b; }
+.feature-switch__toggle { position: relative; transition: border-color .16s ease, background .16s ease; }
+.feature-switch__toggle::after { content: ''; position: absolute; top: 3px; left: 4px; width: 16px; height: 16px; border-radius: 50%; background: #81746b; transition: transform .16s ease, background .16s ease; }
+.feature-switch input:checked + .feature-switch__toggle { border-color: #d4a85d; background: rgba(91,31,40,.72); }
+.feature-switch input:checked + .feature-switch__toggle::after { transform: translateX(16px); background: #f2c777; }
+.feature-switch__status { display: inline-grid; place-items: center; }
+.feature-switch__status::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #6e625b; }
+.feature-switch__status.is-enabled { border-color: #d4a85d; background: rgba(91,31,40,.45); }
+.feature-switch__status.is-enabled::after { background: #f2c777; box-shadow: 0 0 9px rgba(242,199,119,.6); }
+.feature-switch small { color: #81746b; font-size: .7rem; }
+.feature-switches--readonly .feature-switch { cursor: default; }
 .kick-button { margin-left: auto; min-height: 34px; color: #d8aaa1; border: 1px solid #7a2632; background: transparent; border-radius: 3px; cursor: pointer; }
 .character-picker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin: 18px 0; }
 .character-picker button { position: relative; min-width: 0; height: 112px; overflow: hidden; border: 1px solid #6e625b; color: #e8ddc8; background: linear-gradient(#281a16,#17100e); border-radius: 7px; cursor: pointer; padding: 0; }

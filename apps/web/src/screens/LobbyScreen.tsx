@@ -1,5 +1,15 @@
-import type { RoomView, V6GameMode } from '@bluff-tavern/shared';
+import type { RoomView, V6GameMode, V7ExtensionSettings } from '@bluff-tavern/shared';
 import { CHARACTER_ART, CHARACTER_IDS } from '../art';
+
+const V7_FEATURE_SWITCHES: Array<{ key: keyof V7ExtensionSettings; label: string }> = [
+  { key: 'itemsEnabled', label: '启用道具' },
+  { key: 'tavernEventsEnabled', label: '启用酒馆事件' },
+  { key: 'characterAbilitiesEnabled', label: '启用角色能力' },
+];
+
+function toV6Mode(gameMode: RoomView['settings']['gameMode']): V6GameMode {
+  return gameMode === 'QUICK' ? 'QUICK' : 'CLASSIC';
+}
 
 interface LobbyProps {
   room: RoomView;
@@ -16,6 +26,14 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
   const copyCode = () => void navigator.clipboard?.writeText(room.code);
   const isHost = room.hostPlayerId === playerId;
   const self = room.players.find((player) => player.id === playerId);
+  const extensionSettings = room.settings.v7;
+  const updateExtension = (key: keyof V7ExtensionSettings, enabled: boolean) => onSettingsChange({
+    ...room.settings,
+    gameMode: toV6Mode(room.settings.gameMode),
+    eventEnabled: false,
+    bulletCount: null,
+    v7: { ...extensionSettings, [key]: enabled },
+  });
   return <main className="lobby">
     <header className="lobby-header">
       <div><p className="eyebrow">等待牌友入席</p><h1>酒馆大厅</h1></div>
@@ -37,6 +55,16 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
           <option value="CLASSIC">经典（15 秒）</option><option value="QUICK">快速（7 秒）</option>
         </select>
       </label>}
+      <div className={`feature-switches${isHost ? '' : ' feature-switches--readonly'}`} aria-label="V7 扩展玩法开关">
+        {V7_FEATURE_SWITCHES.map((feature) => <label className="feature-switch" key={feature.key}>
+          {isHost ? <>
+            <input type="checkbox" checked={extensionSettings[feature.key]} onChange={(event) => updateExtension(feature.key, event.target.checked)} />
+            <span className="feature-switch__toggle" aria-hidden="true" />
+          </> : <span className={`feature-switch__status${extensionSettings[feature.key] ? ' is-enabled' : ''}`} aria-hidden="true" />}
+          <span>{feature.label}</span>
+          <small>{extensionSettings[feature.key] ? '已开启' : '关闭'}</small>
+        </label>)}
+      </div>
       <ul className="player-list">
         {room.players.map((player) => <li key={player.id} className={player.id === playerId ? 'is-self' : ''}>
           {player.characterId ? <div className="character-portrait character-portrait--small" aria-hidden="true"><img src={CHARACTER_ART[player.characterId].image} alt="" /></div>

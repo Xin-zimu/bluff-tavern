@@ -18,6 +18,9 @@ const failure = (error: unknown) => error instanceof RoomError
   : { ok: false as const, error: { code: 'SERVER_ERROR', message: '服务器暂时不可用' } };
 const processedRoomRequests = new Map<string, Ack<RoomView>>();
 const processedGameRequests = new Map<string, Ack<GameView>>();
+type V7SettingsPatch = {
+  [Key in keyof RoomView['settings']['v7']]?: RoomView['settings']['v7'][Key] | undefined;
+};
 
 export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: RoomStore, games: GameService, scheduler: GameScheduler, logger: AppLogger): void {
   let windowStartedAt = Date.now();
@@ -144,6 +147,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
         turnDurationSeconds: parsed.data.gameMode === 'QUICK' ? 7 : (parsed.data.turnDurationSeconds ?? previous.settings.turnDurationSeconds),
         eventEnabled: false,
         bulletCount: null,
+        v7: mergeV7Settings(previous.settings.v7, parsed.data.v7),
       });
       const result = { ok: true as const, data: room };
       processedRoomRequests.set(requestKey, result);
@@ -434,4 +438,12 @@ function gameRequestKey(roomCode: string, playerId: string, requestId: string): 
 
 function roomRequestKey(roomCode: string, playerId: string, requestId: string): string {
   return `${roomCode}:${playerId}:${requestId}`;
+}
+
+function mergeV7Settings(previous: RoomView['settings']['v7'], patch: V7SettingsPatch | undefined): RoomView['settings']['v7'] {
+  return {
+    itemsEnabled: patch?.itemsEnabled ?? previous.itemsEnabled,
+    tavernEventsEnabled: patch?.tavernEventsEnabled ?? previous.tavernEventsEnabled,
+    characterAbilitiesEnabled: patch?.characterAbilitiesEnabled ?? previous.characterAbilitiesEnabled,
+  };
 }

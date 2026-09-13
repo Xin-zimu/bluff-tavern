@@ -9,7 +9,7 @@ function makeRoom(playerCount: number, code = 'ABC234'): RoomView {
     hostPlayerId: 'p1',
     status: 'PLAYING',
     maxPlayers: playerCount,
-    settings: { maxPlayers: playerCount, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null },
+    settings: { maxPlayers: playerCount, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null, v7: { itemsEnabled: false, tavernEventsEnabled: false, characterAbilitiesEnabled: false } },
     createdAt: 1,
     players: Array.from({ length: playerCount }, (_, index) => ({
       id: `p${index + 1}`,

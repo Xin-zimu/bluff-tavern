@@ -6,7 +6,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
-import type { RoomView, V6GameMode } from '@bluff-tavern/shared';
+import type { RoomSettings, RoomView, V6GameMode } from '@bluff-tavern/shared';
 
 type MotionPreference = 'system' | 'full' | 'reduced';
 
@@ -151,7 +151,7 @@ export function App() {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
-  const updateSettings = (settings: { maxPlayers: number; gameMode: V6GameMode; turnDurationSeconds: number; eventEnabled: boolean; bulletCount: number | null }) => {
+  const updateSettings = (settings: RoomSettings & { gameMode: V6GameMode }) => {
     if (!state.room) return;
     socket.emit('room:updateSettings', { roomCode: state.room.code, ...settings, requestId: requestId() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);

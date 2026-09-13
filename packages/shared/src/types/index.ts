@@ -8,12 +8,19 @@ export type CharacterId = 'WOLF' | 'FOX' | 'BEAR' | 'RABBIT' | 'CAT' | 'RACCOON'
 export type ItemId = 'SPYGLASS' | 'SWAP_GLOVE' | 'WAX_SEAL' | 'TAVERN_MUG' | 'POCKET_WATCH';
 export type EmoteId = 'CHEER' | 'SUSPECT' | 'BLUFF' | 'LAUGH' | 'GASP' | 'NERVOUS' | 'TOAST' | 'GOOD_GAME';
 
+export interface V7ExtensionSettings {
+  itemsEnabled: boolean;
+  tavernEventsEnabled: boolean;
+  characterAbilitiesEnabled: boolean;
+}
+
 export interface RoomSettings {
   maxPlayers: number;
   gameMode: GameMode;
   turnDurationSeconds: number;
   eventEnabled: boolean;
   bulletCount: number | null;
+  v7: V7ExtensionSettings;
 }
 
 export interface PlayerView {

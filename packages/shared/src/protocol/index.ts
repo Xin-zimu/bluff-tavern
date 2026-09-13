@@ -9,6 +9,11 @@ export const joinRoomSchema = z.object({ nickname: nicknameSchema, roomCode: roo
 export const leaveRoomSchema = z.object({ roomCode: roomCodeSchema });
 export const requestIdSchema = z.string().uuid();
 export const readyRoomSchema = z.object({ roomCode: roomCodeSchema, ready: z.boolean(), requestId: requestIdSchema });
+export const v7ExtensionSettingsPatchSchema = z.object({
+  itemsEnabled: z.boolean().optional(),
+  tavernEventsEnabled: z.boolean().optional(),
+  characterAbilitiesEnabled: z.boolean().optional(),
+});
 export const updateRoomSettingsSchema = z.object({
   roomCode: roomCodeSchema,
   maxPlayers: z.number().int().min(MIN_PLAYERS).max(MAX_PLAYERS),
@@ -16,6 +21,7 @@ export const updateRoomSettingsSchema = z.object({
   turnDurationSeconds: z.number().int().min(5).max(30).optional(),
   eventEnabled: z.boolean().optional(),
   bulletCount: z.number().int().min(1).max(5).nullable().optional(),
+  v7: v7ExtensionSettingsPatchSchema.optional(),
   requestId: requestIdSchema,
 });
 export const kickPlayerSchema = z.object({ roomCode: roomCodeSchema, targetPlayerId: z.string().uuid(), requestId: requestIdSchema });
