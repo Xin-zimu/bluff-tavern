@@ -12,7 +12,7 @@ interface HealthPayload {
 }
 
 describe('health endpoint', () => {
-  it('reports V6.7 runtime counters', async () => {
+  it('reports V7 runtime counters', async () => {
     const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
     try {
       const response = await app.inject({ method: 'GET', url: '/health' });
@@ -20,7 +20,7 @@ describe('health endpoint', () => {
       expect(response.statusCode).toBe(200);
       expect(payload).toMatchObject({
         status: 'ok',
-        version: '6.7.0',
+        version: '7.0.0',
         rooms: 0,
         connections: 0,
         players: 0,

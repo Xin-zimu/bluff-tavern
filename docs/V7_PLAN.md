@@ -58,6 +58,15 @@ interface V7ExtensionSettings {
 
 服务端必须在 `itemsEnabled` 为 `true` 时才分配和执行道具。客户端只能发送使用意图，不能自行决定结果。
 
+当前 V7.0-B 落地边界：
+
+- `itemsEnabled=false` 时不发放道具，`game:useItem` 返回关闭错误。
+- `itemsEnabled=true` 时开局给每名玩家发 1 个第一批低风险道具。
+- `GameSnapshot.items` 只包含当前查看者自己的库存。
+- 望远镜只给自己显示下一次受罚风险高/低提示，不公开弹巢位置。
+- 旧怀表只能在自己的 `TURN` 使用，延长当前回合倒计时一次。
+- 酒杯只给自己触发短暂 UI 晃动提示，不改变手牌、出牌、质疑或惩罚判定。
+
 ## V7.0-C: Tavern Events
 
 每轮开始时小概率触发公开酒馆事件，第一批事件只影响节奏或表现：
@@ -67,6 +76,14 @@ interface V7ExtensionSettings {
 - 双倍危机：惩罚阶段增加视觉和心理压力，第一版不增加实弹。
 
 服务端必须在 `tavernEventsEnabled` 为 `true` 时才抽取事件。事件结果写入权威快照，客户端只负责展示。
+
+当前 V7.0-C 落地边界：
+
+- `tavernEventsEnabled=false` 时 `GameSnapshot.tavernEvent` 始终为 `null`。
+- `tavernEventsEnabled=true` 时每轮开始有小概率抽取公开事件。
+- 快速夜会缩短本轮回合倒计时，但不改变出牌、质疑或惩罚规则。
+- 烛火摇曳只加强本轮质疑/翻牌演出节奏。
+- 双倍危机只加强本轮惩罚演出压力，第一版不增加实弹。
 
 ## V7.0-D: Character Abilities
 

@@ -124,8 +124,13 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     const cached = processedGameRequests.get(gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId));
     if (cached) return ack(cached);
     try {
-      games.useItem(parsed.data.roomCode, socket.data.playerId!);
-      throw new RoomError('FEATURE_DISABLED', 'V6.0 暂时关闭道具');
+      const state = games.useItem(parsed.data.roomCode, socket.data.playerId!, parsed.data.itemId);
+      const result = { ok: true as const, data: state };
+      processedGameRequests.set(gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId), result);
+      logger.info({ event: 'item_used', roomCode: parsed.data.roomCode, playerId: socket.data.playerId, itemId: parsed.data.itemId });
+      broadcastGameSnapshots(io, rooms, games, parsed.data.roomCode);
+      scheduleGame(io, rooms, games, scheduler, parsed.data.roomCode, logger);
+      ack(result);
     } catch (error) {
       const result = failure(error);
       processedGameRequests.set(gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId), result);

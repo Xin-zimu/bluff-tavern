@@ -17,6 +17,8 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const canPlay = isTurn && !game.mustChallenge;
   const canChallenge = isTurn && game.lastPlay !== null;
   const isGameOver = game.phase === 'GAME_OVER';
+  const eventClass = game.tavernEvent ? ` game-screen--event-${game.tavernEvent.type.toLowerCase().replace('_', '-')}` : '';
+  const modeCopy = `${game.gameMode === 'QUICK' ? '快速' : '经典'} ${game.turnDurationSeconds} 秒`;
   const players = useMemo(() => {
     const seated = room.players.map((player) => ({ ...player, cards: game.players.find((entry) => entry.playerId === player.id)?.cardCount ?? 0, alive: game.alivePlayerIds.includes(player.id) }));
     const self = seated.find((player) => player.id === playerId);
@@ -52,15 +54,18 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   }, [game, audioMuted]);
   const syncedNow = clockRef.current.serverNow + (localNow - clockRef.current.localReceivedAt);
   const secondsLeft = game.phaseEndsAt ? Math.max(0, Math.ceil((game.phaseEndsAt - syncedNow) / 1_000)) : null;
-  return <main className="game-screen">
+  const activeItemEffect = game.itemEffect && (game.itemEffect.expiresAt === null || game.itemEffect.expiresAt > syncedNow) ? game.itemEffect : null;
+  const tipsy = activeItemEffect?.type === 'TAVERN_MUG_TIPSY';
+  return <main className={`game-screen${eventClass}`}>
     <p className="rotate-hint">为获得最佳牌桌视野，请横屏游玩</p>
-    <header className="game-header"><div><p className="eyebrow">第 {game.roundNumber} 轮 · {game.gameMode === 'QUICK' ? '快速 7 秒' : '经典 15 秒'} · #{game.sequence}</p><h1>{isGameOver ? '本局结算' : '诡牌酒桌'}</h1></div><div className="game-header-actions">{secondsLeft !== null && <span className="phase-clock">{secondsLeft}s</span>}<span className="discard">已出 {game.discardCount} 张</span><button className="fullscreen-button" onClick={() => setRulesOpen(true)}>规则</button><button className="fullscreen-button" onClick={onFullscreen}>全屏</button><button className="fullscreen-button fullscreen-button--danger" onClick={leaveWithConfirm}>退出房间</button></div></header>
+    <header className="game-header"><div><p className="eyebrow">第 {game.roundNumber} 轮 · {modeCopy} · #{game.sequence}</p><h1>{isGameOver ? '本局结算' : '诡牌酒桌'}</h1></div><div className="game-header-actions">{secondsLeft !== null && <span className="phase-clock">{secondsLeft}s</span>}<span className="discard">已出 {game.discardCount} 张</span><button className="fullscreen-button" onClick={() => setRulesOpen(true)}>规则</button><button className="fullscreen-button" onClick={onFullscreen}>全屏</button><button className="fullscreen-button fullscreen-button--danger" onClick={leaveWithConfirm}>退出房间</button></div></header>
     <div className="cinematic-controls" aria-label="演出设置">
       <button type="button" aria-pressed={!audioMuted} onClick={onToggleAudio}>{audioMuted ? '音效关' : '音效开'}</button>
       <button type="button" aria-pressed={lowPowerActive} onClick={onToggleLowPower}>{lowPowerActive ? '性能省' : '性能满'}</button>
       <button type="button" aria-pressed={reduceMotion} onClick={onToggleReduceMotion}>{reduceMotion ? '动画少' : '动画全'}</button>
     </div>
     {hintCopy && <aside className="onboarding-tip" aria-live="polite"><p>{hintCopy}</p><button type="button" onClick={dismissTip}>知道了</button></aside>}
+    {game.tavernEvent && <TavernEventBanner event={game.tavernEvent} />}
     {!isGameOver && <div className="turn-banner" aria-live="polite">{isTurn ? (game.mustChallenge ? '你的回合：必须质疑上一手' : '你的回合：选择 1 至 3 张牌') : game.phase === 'TURN' ? `等待 ${currentPlayer?.nickname ?? '玩家'} 出牌` : statusCopy}</div>}
     <section className={`panel game-table${game.phase === 'PUNISHMENT_RESULT' && game.punishment?.hit ? ' game-table--elimination' : ''}${isGameOver ? ' game-table--victory' : ''}`}><div className="table-status"><span>{statusCopy}</span></div>
       <div className="table-surface" aria-label="牌桌">
@@ -72,11 +77,17 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
         <span className="seat-copy"><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><small>{player.id === game.turnPlayerId && game.phase === 'TURN' ? '出牌中 · ' : ''}{player.characterId ? CHARACTER_ART[player.characterId].name : '未选角色'} · {player.alive ? `${player.cards} 张手牌` : '已淘汰'}</small></span>
       </li>)}</ul>
     </section>
-    {!isGameOver && <section className="hand" aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card card--${card.toLowerCase()} ${selected.includes(index) ? 'selected' : ''}`} aria-pressed={selected.includes(index)} onClick={() => toggle(index)} disabled={!canPlay}>{card === 'JOKER' ? <img src="/assets/cards/joker.png" alt="Joker" /> : <span>{card}</span>}</button>)}</section>}
+    {!isGameOver && <section className={`hand${tipsy ? ' hand--tipsy' : ''}`} aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card card--${card.toLowerCase()} ${selected.includes(index) ? 'selected' : ''}`} aria-pressed={selected.includes(index)} onClick={() => toggle(index)} disabled={!canPlay}>{card === 'JOKER' ? <img src="/assets/cards/joker.png" alt="Joker" /> : <span>{card}</span>}</button>)}</section>}
     {!isGameOver && <button className="button button--primary button--art-start play-button" disabled={!canPlay || selected.length === 0} onClick={play}>出 {selected.length || ''} 张牌</button>}
-    {game.items.length > 0 && <div className="item-bar" aria-label="可用道具">{game.items.map((item) => <button key={item} className="item-button" onClick={() => onUseItem(item)} title={ITEM_NAMES[item]}>
-      <img src={ITEM_ART[item]} alt="" loading="lazy" /><span>{ITEM_NAMES[item]}</span>
-    </button>)}</div>}
+    {!isGameOver && (game.items.length > 0 || activeItemEffect) && <div className="item-dock">
+      {activeItemEffect && <p className={`item-effect item-effect--${activeItemEffect.riskLevel?.toLowerCase() ?? 'neutral'}`} aria-live="polite">{activeItemEffect.message}</p>}
+      {game.items.length > 0 && <div className="item-bar" aria-label="可用道具">{game.items.map((item) => {
+        const enabled = canUseItem(item, game, playerId);
+        return <button key={item} className="item-button" onClick={() => onUseItem(item)} disabled={!enabled} title={describeItem(item)}>
+          <img src={ITEM_ART[item]} alt="" loading="lazy" /><span>{ITEM_NAMES[item]}</span>
+        </button>;
+      })}</div>}
+    </div>}
     {canChallenge && <button className="button button--secondary button--art-challenge play-button" onClick={() => { if (!audioMuted) playUiTone(180); onChallenge(); }}>质疑上一手</button>}
     {game.challengeResult && <div className="challenge-result" aria-live="polite"><img src="/assets/effects/challenge_burst.png" alt="" aria-hidden="true" /><p>翻牌：{game.challengeResult.revealedCards.join('、')}；{game.challengeResult.wasBluff ? '上一位玩家撒谎' : '质疑失败'}，失败者：{players.find((player) => player.id === game.challengeResult?.failedPlayerId)?.nickname}</p></div>}
     {game.punishment && <p className="future-note">轮盘第 {game.punishment.chamber + 1} 弹巢：{game.punishment.hit ? '中弹淘汰' : '空枪，继续游戏'}。</p>}
@@ -126,6 +137,25 @@ function CardFace({ rank, size = 'normal' }: { rank: CardRank; size?: 'normal' |
   </span>;
 }
 
+function TavernEventBanner({ event }: { event: NonNullable<GameView['tavernEvent']> }) {
+  return <aside className={`tavern-event tavern-event--${event.type.toLowerCase().replace('_', '-')}`} aria-live="polite">
+    <strong>{event.title}</strong>
+    <span>{event.description}</span>
+  </aside>;
+}
+
+function canUseItem(item: GameView['items'][number], game: GameView, playerId: string | null): boolean {
+  if (!playerId || !game.alivePlayerIds.includes(playerId) || game.phase !== 'TURN') return false;
+  if (item === 'POCKET_WATCH') return game.turnPlayerId === playerId;
+  return true;
+}
+
+function describeItem(item: GameView['items'][number]): string {
+  if (item === 'SPYGLASS') return '查看自己下一次受罚风险';
+  if (item === 'POCKET_WATCH') return '自己的回合延长倒计时';
+  return '短暂干扰自己的界面提示，不改变判定';
+}
+
 function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPlayerName?: string): string {
   if (game.phase === 'GAME_OVER') return '本局结束';
   if (game.phase === 'ROUND_START') return `第 ${game.roundNumber} 轮开始，目标牌 ${game.targetCard}`;
@@ -135,9 +165,9 @@ function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPla
     return `等待 ${currentPlayerName ?? '玩家'} 出牌`;
   }
   if (game.phase === 'CHALLENGE_CALLOUT') return '质疑发起，所有操作已锁定';
-  if (game.phase === 'REVEAL') return '正在逐张揭牌';
+  if (game.phase === 'REVEAL') return game.tavernEvent?.type === 'CANDLE_FLICKER' ? '烛火摇曳，正在逐张揭牌' : '正在逐张揭牌';
   if (game.phase === 'VERDICT') return game.challenge?.wasBluff ? '质疑成功，谎言成立' : '质疑失败，声明成立';
-  if (game.phase.startsWith('PUNISHMENT')) return '正在执行惩罚';
+  if (game.phase.startsWith('PUNISHMENT')) return game.tavernEvent?.type === 'DOUBLE_DANGER' ? '双倍危机下执行惩罚' : '正在执行惩罚';
   if (game.phase === 'ROUND_END') return '本轮结算中';
   return '牌局演出中';
 }

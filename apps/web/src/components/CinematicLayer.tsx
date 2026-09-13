@@ -40,8 +40,10 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
   const punished = findName(room, game.challenge?.punishedPlayerId ?? game.punishment?.punishedPlayerId);
   const winner = findName(room, game.winnerId);
   const result = game.punishment;
+  const eventClass = game.tavernEvent ? ` cinematic--event-${game.tavernEvent.type.toLowerCase().replace('_', '-')}` : '';
+  const punishmentSubtitle = game.tavernEvent?.type === 'DOUBLE_DANGER' ? '危机加剧' : '扣动扳机';
 
-  return <div className={`cinematic cinematic--${game.phase.toLowerCase()}${game.punishment?.hit ? ' cinematic--hit' : ''}`} aria-live="polite" style={{ '--phase-progress': progress } as CSSProperties}>
+  return <div className={`cinematic cinematic--${game.phase.toLowerCase()}${game.punishment?.hit ? ' cinematic--hit' : ''}${eventClass}`} aria-live="polite" style={{ '--phase-progress': progress } as CSSProperties}>
     <div className="cinematic__progress" aria-hidden="true"><span /></div>
     <div className="cinematic__panel">
       <p className="cinematic__phase">{phaseLabels[game.phase]}</p>
@@ -50,7 +52,7 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
       {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} targetRank={game.targetRank} elapsed={elapsed} />}
       {game.phase === 'VERDICT' && <Verdict game={game} punished={punished} />}
       {game.phase === 'PUNISHMENT_INTRO' && <RevolverBeat title={punished} subtitle="弹巢旋转" chamber={null} />}
-      {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle="扣动扳机" chamber={null} tense />}
+      {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle={punishmentSubtitle} chamber={null} tense />}
       {game.phase === 'PUNISHMENT_RESULT' && <PunishmentResult result={result} punished={punished} />}
       {game.phase === 'ROUND_END' && <h2>清理牌桌</h2>}
       {game.phase === 'GAME_OVER' && <Victory winner={winner} />}
@@ -68,6 +70,7 @@ function RoundIntro({ game, progress }: { game: GameView; progress: number }) {
       <span>{game.targetRank}</span>
     </div>
     <p className={progress > 0.48 ? 'is-visible' : ''}>所有玩家本轮声明的牌均视为 {game.targetRank}</p>
+    {game.tavernEvent && <p className={progress > 0.58 ? 'round-event is-visible' : 'round-event'}>{game.tavernEvent.title}：{game.tavernEvent.description}</p>}
     <div className={progress > 0.45 ? 'deal-line is-dealing' : 'deal-line'} aria-hidden="true">
       {Array.from({ length: 5 }, (_, index) => <span key={index} />)}
     </div>

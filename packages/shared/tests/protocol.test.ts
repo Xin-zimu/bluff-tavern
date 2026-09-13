@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { joinRoomSchema, playCardsSchema, updateRoomSettingsSchema } from '../src/index.js';
+import { joinRoomSchema, playCardsSchema, updateRoomSettingsSchema, useItemSchema } from '../src/index.js';
 
 describe('joinRoomSchema', () => {
   it('normalizes valid room codes and nicknames', () => {
@@ -35,5 +35,12 @@ describe('V6 protocol schemas', () => {
     expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 1, 2], requestId: crypto.randomUUID() }).success).toBe(true);
     expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 0], requestId: crypto.randomUUID() }).success).toBe(false);
     expect(playCardsSchema.safeParse({ roomCode: 'ABC234', cardIndexes: [0, 1, 2, 3], requestId: crypto.randomUUID() }).success).toBe(false);
+  });
+
+  it('accepts only the first low-risk V7 items', () => {
+    expect(useItemSchema.safeParse({ roomCode: 'ABC234', itemId: 'SPYGLASS', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(useItemSchema.safeParse({ roomCode: 'ABC234', itemId: 'POCKET_WATCH', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(useItemSchema.safeParse({ roomCode: 'ABC234', itemId: 'TAVERN_MUG', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(useItemSchema.safeParse({ roomCode: 'ABC234', itemId: 'SWAP_GLOVE', requestId: crypto.randomUUID() }).success).toBe(false);
   });
 });

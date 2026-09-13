@@ -3,9 +3,12 @@ export type RoomStatus = 'LOBBY' | 'STARTING' | 'PLAYING' | 'ROUND_RESULT' | 'GA
 export type PlayerStatus = 'CONNECTED' | 'DISCONNECTED' | 'READY' | 'PLAYING' | 'ELIMINATED' | 'SPECTATING';
 export type GameMode = 'CLASSIC' | 'QUICK' | 'PARTY' | 'CUSTOM';
 export type V6GameMode = Extract<GameMode, 'CLASSIC' | 'QUICK'>;
-export type TavernEventType = 'BLACKOUT' | 'DRUNKEN' | 'RAPID_NIGHT' | 'DOUBLE_DANGER';
+export type TavernEventType = 'BLACKOUT' | 'DRUNKEN' | 'RAPID_NIGHT' | 'CANDLE_FLICKER' | 'DOUBLE_DANGER';
 export type CharacterId = 'WOLF' | 'FOX' | 'BEAR' | 'RABBIT' | 'CAT' | 'RACCOON' | 'FROG' | 'PANDA';
 export type ItemId = 'SPYGLASS' | 'SWAP_GLOVE' | 'WAX_SEAL' | 'TAVERN_MUG' | 'POCKET_WATCH';
+export type ActiveItemId = Extract<ItemId, 'SPYGLASS' | 'TAVERN_MUG' | 'POCKET_WATCH'>;
+export type ItemEffectType = 'SPYGLASS_RISK' | 'POCKET_WATCH_EXTENDED' | 'TAVERN_MUG_TIPSY';
+export type ItemRiskLevel = 'LOW' | 'HIGH';
 export type EmoteId = 'CHEER' | 'SUSPECT' | 'BLUFF' | 'LAUGH' | 'GASP' | 'NERVOUS' | 'TOAST' | 'GOOD_GAME';
 
 export interface V7ExtensionSettings {
@@ -128,6 +131,24 @@ export interface GameSummary {
   eliminationOrder: string[];
 }
 
+export interface PublicTavernEvent {
+  type: TavernEventType;
+  title: string;
+  description: string;
+  roundNumber: number;
+  turnDurationSeconds: number | null;
+  intensity: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+export interface PrivateItemEffect {
+  itemId: ActiveItemId;
+  type: ItemEffectType;
+  message: string;
+  expiresAt: number | null;
+  riskLevel?: ItemRiskLevel;
+  extraSeconds?: number;
+}
+
 export interface GameSnapshot {
   sequence: number;
   serverNow: number;
@@ -156,8 +177,9 @@ export interface GameSnapshot {
   winnerId: string | null;
   summary: GameSummary | null;
 
-  tavernEvent: null;
-  items: ItemId[];
+  tavernEvent: PublicTavernEvent | null;
+  items: ActiveItemId[];
+  itemEffect: PrivateItemEffect | null;
   challengeResult: {
     challengerId: string;
     failedPlayerId: string;

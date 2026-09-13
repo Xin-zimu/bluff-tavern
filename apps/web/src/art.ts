@@ -32,10 +32,10 @@ export function characterImage(character: CharacterId, mood: CharacterMood = 'id
 }
 
 export const ITEM_NAMES: Record<ItemId, string> = {
-  SPYGLASS: '窥牌镜',
+  SPYGLASS: '望远镜',
   SWAP_GLOVE: '换牌手套',
   WAX_SEAL: '封口蜡印',
-  TAVERN_MUG: '酒馆木杯',
+  TAVERN_MUG: '酒杯',
   POCKET_WATCH: '旧怀表',
 };
 

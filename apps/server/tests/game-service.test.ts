@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { CardRank, RoomView } from '@bluff-tavern/shared';
+import type { CardRank, RoomView, V7ExtensionSettings } from '@bluff-tavern/shared';
 import { GameService } from '../src/game/game-service.js';
 
-function makeRoom(playerCount: number, code = 'ABC234'): RoomView {
+const defaultV7: V7ExtensionSettings = { itemsEnabled: false, tavernEventsEnabled: false, characterAbilitiesEnabled: false };
+
+function makeV7(overrides: Partial<V7ExtensionSettings>): V7ExtensionSettings {
+  return { ...defaultV7, ...overrides };
+}
+
+function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings = defaultV7): RoomView {
   return {
     id: code,
     code,
     hostPlayerId: 'p1',
     status: 'PLAYING',
     maxPlayers: playerCount,
-    settings: { maxPlayers: playerCount, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null, v7: { itemsEnabled: false, tavernEventsEnabled: false, characterAbilitiesEnabled: false } },
+    settings: { maxPlayers: playerCount, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null, v7: { ...v7 } },
     createdAt: 1,
     players: Array.from({ length: playerCount }, (_, index) => ({
       id: `p${index + 1}`,
@@ -23,6 +29,14 @@ function makeRoom(playerCount: number, code = 'ABC234'): RoomView {
 }
 
 const deterministic = () => new GameService({ nextInt: () => 0 });
+
+const eventRandom = (eventIndex: 0 | 1 | 2) => new GameService({
+  nextInt: (maxExclusive) => {
+    if (maxExclusive === 100) return 0;
+    if (maxExclusive === 3) return eventIndex;
+    return 0;
+  },
+});
 
 function startTurn(service: GameService, room: RoomView) {
   service.start(room);
@@ -209,5 +223,93 @@ describe('V6 GameService rules', () => {
       ['p2', 5, true],
       ['p3', 5, true],
     ]);
+  });
+
+  it('keeps V7 items disabled by default', () => {
+    const room = makeRoom(2);
+    const service = deterministic();
+    const turn = startTurn(service, room);
+
+    expect(turn.items).toEqual([]);
+    expect(turn.itemEffect).toBeNull();
+    expect(turn.tavernEvent).toBeNull();
+    expect(() => service.useItem(room.code, 'p1', 'SPYGLASS')).toThrow('道具未开启');
+  });
+
+  it('keeps V7 item inventory and effects private', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ itemsEnabled: true }));
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetItems(room.code, 'p1', ['SPYGLASS']);
+    service.debugSetItems(room.code, 'p2', ['POCKET_WATCH']);
+    service.debugSetRevolver(room.code, 'p1', { chamberCount: 6, bulletPosition: 2, currentChamber: 2, shotsTaken: 0 });
+
+    const used = service.useItem(room.code, 'p1', 'SPYGLASS');
+
+    expect(used.items).toEqual([]);
+    expect(used.itemEffect).toMatchObject({ itemId: 'SPYGLASS', type: 'SPYGLASS_RISK', riskLevel: 'HIGH' });
+    expect(service.getView(room.code, 'p2').items).toEqual(['POCKET_WATCH']);
+    expect(service.getView(room.code, 'p2').itemEffect).toBeNull();
+  });
+
+  it('lets the pocket watch extend only the current owner turn', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ itemsEnabled: true }));
+    const service = deterministic();
+    const turn = startTurn(service, room);
+    service.debugSetItems(room.code, 'p1', ['POCKET_WATCH']);
+    service.debugSetItems(room.code, 'p2', ['POCKET_WATCH']);
+    const beforeEndsAt = turn.phaseEndsAt;
+    if (!beforeEndsAt) throw new Error('Missing turn end time');
+
+    const used = service.useItem(room.code, 'p1', 'POCKET_WATCH');
+
+    expect(used.phaseEndsAt).toBe(beforeEndsAt + 7_000);
+    expect(used.sequence).toBeGreaterThan(turn.sequence);
+    expect(used.items).toEqual([]);
+    expect(used.itemEffect).toMatchObject({ itemId: 'POCKET_WATCH', type: 'POCKET_WATCH_EXTENDED', extraSeconds: 7 });
+    expect(() => service.useItem(room.code, 'p2', 'POCKET_WATCH')).toThrow('怀表只能在自己的回合使用');
+  });
+
+  it('lets the tavern mug disturb only private presentation hints', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ itemsEnabled: true }));
+    const service = deterministic();
+    const turn = startTurn(service, room);
+    service.debugSetItems(room.code, 'p2', ['TAVERN_MUG']);
+
+    const used = service.useItem(room.code, 'p2', 'TAVERN_MUG');
+
+    expect(used.itemEffect).toMatchObject({ itemId: 'TAVERN_MUG', type: 'TAVERN_MUG_TIPSY' });
+    expect(used.turnPlayerId).toBe(turn.turnPlayerId);
+    expect(used.discardCount).toBe(turn.discardCount);
+    expect(service.getView(room.code, 'p1').itemEffect).toBeNull();
+  });
+
+  it.each([
+    ['RAPID_NIGHT', 0, 10],
+    ['CANDLE_FLICKER', 1, 15],
+    ['DOUBLE_DANGER', 2, 15],
+  ] as const)('draws the enabled tavern event %s into the public round snapshot', (eventType, eventIndex, expectedTurnSeconds) => {
+    const room = makeRoom(2, 'ABC234', makeV7({ tavernEventsEnabled: true }));
+    const service = eventRandom(eventIndex);
+
+    const round = service.start(room);
+    const turn = service.advancePhase(room.code).state;
+
+    expect(round.tavernEvent).toMatchObject({ type: eventType, roundNumber: 1 });
+    expect(turn.tavernEvent).toMatchObject({ type: eventType, roundNumber: 1 });
+    expect(turn.turnDurationSeconds).toBe(expectedTurnSeconds);
+    expect((turn.phaseEndsAt ?? 0) - turn.phaseStartedAt).toBe(expectedTurnSeconds * 1_000);
+  });
+
+  it('does not draw tavern events when the chance roll misses', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ tavernEventsEnabled: true }));
+    const service = new GameService({ nextInt: (maxExclusive) => maxExclusive === 100 ? 99 : 0 });
+
+    const round = service.start(room);
+    const turn = service.advancePhase(room.code).state;
+
+    expect(round.tavernEvent).toBeNull();
+    expect(turn.tavernEvent).toBeNull();
+    expect(turn.turnDurationSeconds).toBe(15);
   });
 });

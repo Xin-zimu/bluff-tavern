@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MAX_CARDS_PER_PLAY, MAX_NICKNAME_LENGTH, MAX_PLAYERS, MIN_NICKNAME_LENGTH, MIN_PLAYERS, ROOM_CODE_LENGTH } from '../constants/index.js';
+import { MAX_CARDS_PER_PLAY, MAX_NICKNAME_LENGTH, MAX_PLAYERS, MIN_NICKNAME_LENGTH, MIN_PLAYERS, ROOM_CODE_LENGTH, V7_ITEM_IDS } from '../constants/index.js';
 import type { Ack, GameCue, GameSnapshot, GameView, RoomMembership, RoomPlayerEvent, RoomView, SessionResumeResult } from '../types/index.js';
 
 export const nicknameSchema = z.string().trim().min(MIN_NICKNAME_LENGTH).max(MAX_NICKNAME_LENGTH);
@@ -37,7 +37,7 @@ export const returnToRoomSchema = z.object({ roomCode: roomCodeSchema, requestId
 export const resumeSessionSchema = z.object({ sessionToken: z.string().min(32).max(256) });
 export const selectCharacterSchema = z.object({ roomCode: roomCodeSchema, characterId: z.enum(['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA']) });
 export const sendEmoteSchema = z.object({ roomCode: roomCodeSchema, emoteId: z.enum(['CHEER', 'SUSPECT', 'BLUFF', 'LAUGH', 'GASP', 'NERVOUS', 'TOAST', 'GOOD_GAME']) });
-export const useItemSchema = z.object({ roomCode: roomCodeSchema, itemId: z.enum(['SPYGLASS', 'SWAP_GLOVE', 'WAX_SEAL', 'TAVERN_MUG', 'POCKET_WATCH']), requestId: requestIdSchema });
+export const useItemSchema = z.object({ roomCode: roomCodeSchema, itemId: z.enum(V7_ITEM_IDS), requestId: requestIdSchema });
 
 export interface ClientToServerEvents {
   'room:create': (payload: z.input<typeof createRoomSchema>, ack: (result: Ack<RoomMembership>) => void) => void;
