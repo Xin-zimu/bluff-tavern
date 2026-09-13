@@ -57,7 +57,11 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
 function RoundIntro({ game, progress }: { game: GameView; progress: number }) {
   return <div className="round-intro">
     <h2>ROUND {game.roundNumber}</h2>
-    <strong className={progress > 0.22 ? 'is-visible' : ''}>目标牌 {game.targetRank}</strong>
+    <strong className={progress > 0.22 ? 'is-visible' : ''}>本轮目标</strong>
+    <div className={`round-intro-card ${progress > 0.34 ? 'is-visible' : ''}`} aria-label={`目标牌 ${game.targetRank}`}>
+      <span>{game.targetRank}</span>
+    </div>
+    <p className={progress > 0.48 ? 'is-visible' : ''}>所有玩家本轮声明的牌均视为 {game.targetRank}</p>
     <div className={progress > 0.45 ? 'deal-line is-dealing' : 'deal-line'} aria-hidden="true">
       {Array.from({ length: 5 }, (_, index) => <span key={index} />)}
     </div>

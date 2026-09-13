@@ -111,6 +111,20 @@ export class RoomStore {
     return this.getView(code);
   }
 
+  returnToLobby(code: string, playerId: string): RoomView {
+    const room = this.requireMember(code, playerId);
+    if (room.status !== 'GAME_OVER') throw new RoomError('GAME_NOT_OVER', '当前牌局尚未结束');
+    room.status = 'LOBBY';
+    room.players.forEach((player) => {
+      player.status = player.isConnected ? 'CONNECTED' : 'DISCONNECTED';
+    });
+    if (!room.players.some((player) => player.id === room.hostPlayerId && player.isConnected)) {
+      const nextHost = room.players.find((player) => player.isConnected) ?? room.players[0];
+      if (nextHost) room.hostPlayerId = nextHost.id;
+    }
+    return this.getView(code);
+  }
+
   disconnect(socketId: string): Departure | null {
     for (const [code, room] of this.rooms) {
       const player = room.players.find((candidate) => candidate.socketId === socketId);
@@ -141,20 +155,35 @@ export class RoomStore {
       const index = room.players.findIndex((player) => player.socketId === socketId);
       if (index < 0) continue;
       const departed = room.players[index]!;
+      if (room.status === 'PLAYING' || room.status === 'ROUND_RESULT') {
+        departed.isConnected = false;
+        departed.status = 'DISCONNECTED';
+        departed.socketId = '';
+        if (room.hostPlayerId === departed.id) this.transferHost(room);
+        return { code, player: this.toPlayerView(departed), room: this.getView(code) };
+      }
       room.players.splice(index, 1);
       if (room.players.length === 0) {
         this.rooms.delete(code);
         return { code, player: this.toPlayerView(departed), room: null };
       }
-      if (room.hostPlayerId === departed.id || !room.players.some((p) => p.id === room.hostPlayerId)) {
-        room.hostPlayerId = room.players[0]!.id;
-      }
+      if (room.hostPlayerId === departed.id || !room.players.some((p) => p.id === room.hostPlayerId)) this.transferHost(room);
       return { code, player: this.toPlayerView(departed), room: this.getView(code) };
     }
     return null;
   }
 
   has(code: string): boolean { return this.rooms.has(code); }
+
+  getStats(): { rooms: number; connections: number; players: number } {
+    let connections = 0;
+    let players = 0;
+    for (const room of this.rooms.values()) {
+      players += room.players.length;
+      connections += room.players.filter((player) => player.isConnected).length;
+    }
+    return { rooms: this.rooms.size, connections, players };
+  }
 
   getSocketId(code: string, playerId: string): string | null {
     return this.rooms.get(code)?.players.find((player) => player.id === playerId)?.socketId ?? null;
@@ -188,6 +217,11 @@ export class RoomStore {
 
   private requireHost(room: InternalRoom, playerId: string): void {
     if (room.hostPlayerId !== playerId) throw new RoomError('NOT_HOST', '你不是房主');
+  }
+
+  private transferHost(room: InternalRoom): void {
+    const nextHost = room.players.find((player) => player.isConnected) ?? room.players[0];
+    if (nextHost) room.hostPlayerId = nextHost.id;
   }
 
   private toPlayerView(player: InternalPlayer): PlayerView {

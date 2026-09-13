@@ -27,6 +27,7 @@ export const playCardsSchema = z.object({
 }).refine((value) => new Set(value.cardIndexes).size === value.cardIndexes.length, { message: 'Card indexes must be unique' });
 export const challengeSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
 export const restartGameSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
+export const returnToRoomSchema = z.object({ roomCode: roomCodeSchema, requestId: requestIdSchema });
 export const resumeSessionSchema = z.object({ sessionToken: z.string().min(32).max(256) });
 export const selectCharacterSchema = z.object({ roomCode: roomCodeSchema, characterId: z.enum(['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA']) });
 export const sendEmoteSchema = z.object({ roomCode: roomCodeSchema, emoteId: z.enum(['CHEER', 'SUSPECT', 'BLUFF', 'LAUGH', 'GASP', 'NERVOUS', 'TOAST', 'GOOD_GAME']) });
@@ -43,6 +44,7 @@ export interface ClientToServerEvents {
   'game:playCards': (payload: z.input<typeof playCardsSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:challenge': (payload: z.input<typeof challengeSchema>, ack: (result: Ack<GameView>) => void) => void;
   'game:restart': (payload: z.input<typeof restartGameSchema>, ack: (result: Ack<GameView>) => void) => void;
+  'game:returnToRoom': (payload: z.input<typeof returnToRoomSchema>, ack: (result: Ack<RoomView>) => void) => void;
   'session:resume': (payload: z.input<typeof resumeSessionSchema>, ack: (result: Ack<SessionResumeResult>) => void) => void;
   'room:selectCharacter': (payload: z.input<typeof selectCharacterSchema>, ack: (result: Ack<RoomView>) => void) => void;
   'game:sendEmote': (payload: z.input<typeof sendEmoteSchema>, ack: (result: Ack<null>) => void) => void;

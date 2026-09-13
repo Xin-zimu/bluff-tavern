@@ -1,5 +1,5 @@
 import type { Server, Socket } from 'socket.io';
-import { challengeSchema, createRoomSchema, joinRoomSchema, kickPlayerSchema, leaveRoomSchema, playCardsSchema, readyRoomSchema, restartGameSchema, resumeSessionSchema, selectCharacterSchema, sendEmoteSchema, startGameSchema, updateRoomSettingsSchema, useItemSchema, type Ack, type ClientToServerEvents, type GameCue, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SessionResumeResult, type SocketData } from '@bluff-tavern/shared';
+import { challengeSchema, createRoomSchema, joinRoomSchema, kickPlayerSchema, leaveRoomSchema, playCardsSchema, readyRoomSchema, restartGameSchema, resumeSessionSchema, returnToRoomSchema, selectCharacterSchema, sendEmoteSchema, startGameSchema, updateRoomSettingsSchema, useItemSchema, type Ack, type ClientToServerEvents, type GameCue, type GameView, type InterServerEvents, type RoomView, type ServerToClientEvents, type SessionResumeResult, type SocketData } from '@bluff-tavern/shared';
 import { GameScheduler } from '../game/game-scheduler.js';
 import { GameService } from '../game/game-service.js';
 import { RoomError, RoomStore } from '../rooms/room-store.js';
@@ -276,6 +276,28 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     } catch (error) {
       const result = failure(error);
       processedGameRequests.set(key, result);
+      ack(result);
+    }
+  });
+
+  socket.on('game:returnToRoom', (payload, ack) => {
+    const parsed = returnToRoomSchema.safeParse(payload);
+    if (!parsed.success || !isCurrentMember(socket, rooms, parsed.data.roomCode)) return ack(invalid);
+    const key = roomRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId);
+    const cached = processedRoomRequests.get(key);
+    if (cached) return ack(cached);
+    try {
+      const room = rooms.returnToLobby(parsed.data.roomCode, socket.data.playerId!);
+      games.end(room.code);
+      scheduler.cancel(room.code);
+      const result = { ok: true as const, data: room };
+      processedRoomRequests.set(key, result);
+      logger.info({ event: 'game_returned_to_room', roomCode: room.code, playerId: socket.data.playerId });
+      io.to(room.code).emit('room:state', room);
+      ack(result);
+    } catch (error) {
+      const result = failure(error);
+      processedRoomRequests.set(key, result);
       ack(result);
     }
   });

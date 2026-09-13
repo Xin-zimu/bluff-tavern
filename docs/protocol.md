@@ -1,4 +1,4 @@
-# V1.0 Socket 协议
+# V6.6 Socket 协议
 
 类型真源位于 `packages/shared/src/protocol/index.ts`。
 
@@ -13,7 +13,8 @@
 - `game:start`：`{ roomCode, requestId }`，仅房主；至少两人且全员准备。
 - `game:playCards`：`{ roomCode, cardIndexes, requestId }`，仅当前回合玩家；1–3 个不重复手牌索引。
 - `game:challenge`：`{ roomCode, requestId }`，仅质疑窗口中的当前玩家。
-- `game:restart`：`{ roomCode, requestId }`，仅 GAME_OVER 后的房主。
+- `game:restart`：`{ roomCode, requestId }`，兼容旧客户端，仅 GAME_OVER 后的房主直接开新局。
+- `game:returnToRoom`：`{ roomCode, requestId }`，GAME_OVER 后返回房间等待区，清理上一局快照并重置准备状态。
 - `session:resume`：`{ sessionToken }`，恢复牌局或结算中断线玩家的原座位，返回新的公开房间快照及原身份。
 
 所有 ack 均为 `{ ok: true, data }` 或 `{ ok: false, error: { code, message } }`。

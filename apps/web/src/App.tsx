@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ConnectionBadge } from './components/ConnectionBadge';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { socket } from './socket/client';
 import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
-import type { V6GameMode } from '@bluff-tavern/shared';
+import type { RoomView, V6GameMode } from '@bluff-tavern/shared';
 
 type MotionPreference = 'system' | 'full' | 'reduced';
 
@@ -48,7 +49,7 @@ function requestId(): string {
 
 export function App() {
   const state = useSessionStore();
-  const { setConnection, setNetworkOnline, updateRoom, leaveRoom: clearRoom, setNotice, setGame } = state;
+  const { setConnection, setNetworkOnline, updateRoom, leaveRoom: clearRoom, setNotice, setGame, clearGame } = state;
   const [busy, setBusy] = useState(false);
   const [audioMuted, setAudioMuted] = useState(() => readBooleanPreference('bluff-tavern.audio-muted'));
   const [manualLowPower, setManualLowPower] = useState(() => readBooleanPreference('bluff-tavern.low-power'));
@@ -112,13 +113,17 @@ export function App() {
       setNotice(message);
       socket.disconnect();
     };
-    socket.on('connect', connected).on('disconnect', disconnected).on('room:state', updateRoom).on('room:closed', closeRoom).on('room:kicked', kicked).on('session:replaced', replaced).on('game:snapshot', setGame).on('game:state', setGame).on('game:turnStarted', setGame);
+    const roomState = (room: RoomView) => {
+      updateRoom(room);
+      if (room.status === 'LOBBY') clearGame();
+    };
+    socket.on('connect', connected).on('disconnect', disconnected).on('room:state', roomState).on('room:closed', closeRoom).on('room:kicked', kicked).on('session:replaced', replaced).on('game:snapshot', setGame).on('game:state', setGame).on('game:turnStarted', setGame);
     window.addEventListener('online', online);
     window.addEventListener('offline', offline);
     document.addEventListener('visibilitychange', visibilityChange);
     socket.connect();
-    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', updateRoom).off('room:closed', closeRoom).off('room:kicked', kicked).off('session:replaced', replaced).off('game:snapshot', setGame).off('game:state', setGame).off('game:turnStarted', setGame); window.removeEventListener('online', online); window.removeEventListener('offline', offline); document.removeEventListener('visibilitychange', visibilityChange); socket.disconnect(); };
-  }, [setConnection, setNetworkOnline, updateRoom, clearRoom, setNotice, setGame]);
+    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', roomState).off('room:closed', closeRoom).off('room:kicked', kicked).off('session:replaced', replaced).off('game:snapshot', setGame).off('game:state', setGame).off('game:turnStarted', setGame); window.removeEventListener('online', online); window.removeEventListener('offline', offline); document.removeEventListener('visibilitychange', visibilityChange); socket.disconnect(); };
+  }, [setConnection, setNetworkOnline, updateRoom, clearRoom, setNotice, setGame, clearGame]);
 
   const createRoom = (nickname: string) => {
     setBusy(true);
@@ -176,10 +181,15 @@ export function App() {
       if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
     });
   };
-  const restartGame = () => {
+  const returnToRoom = () => {
     if (!state.room) return;
-    socket.emit('game:restart', { roomCode: state.room.code, requestId: requestId() }, (result) => {
-      if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
+    socket.emit('game:returnToRoom', { roomCode: state.room.code, requestId: requestId() }, (result) => {
+      if (result.ok) {
+        state.updateRoom(result.data);
+        state.clearGame();
+      } else {
+        state.setNotice(result.error.message);
+      }
     });
   };
   const selectCharacter = (characterId: NonNullable<NonNullable<typeof state.room>['players'][number]['characterId']>) => {
@@ -205,14 +215,31 @@ export function App() {
   const lowPowerActive = lowPerformance || manualLowPower;
   const reduceMotion = motionPreference === 'reduced' || (motionPreference === 'system' && systemReducedMotion);
   const forceMotion = motionPreference === 'full';
-  const screen = state.room && state.game ? 'game' : state.room ? 'lobby' : 'home';
+  const screen = state.room && state.game && state.room.status !== 'LOBBY' ? 'game' : state.room ? 'lobby' : 'home';
 
-  return <div className={`app-shell app-shell--${screen}${state.game?.phase === 'GAME_OVER' ? ' app-shell--victory' : ''}${lowPowerActive ? ' app-shell--low-power' : ''}${reduceMotion ? ' app-shell--reduce-motion' : ''}${forceMotion ? ' app-shell--force-motion' : ''}`}>
+  const reconnect = () => {
+    if (socket.connected) {
+      const sessionToken = localStorage.getItem('bluff-tavern.session-token');
+      if (sessionToken) socket.emit('session:resume', { sessionToken }, (result) => {
+        if (result.ok) {
+          state.enterRoom(result.data.room, result.data.playerId, result.data.sessionToken);
+          if (result.data.game) state.setGame(result.data.game); else state.clearGame();
+        } else {
+          state.setNotice(result.error.message);
+        }
+      });
+      return;
+    }
+    socket.connect();
+  };
+
+  return <ErrorBoundary onReset={reconnect}><div className={`app-shell app-shell--${screen}${state.game?.phase === 'GAME_OVER' ? ' app-shell--victory' : ''}${lowPowerActive ? ' app-shell--low-power' : ''}${reduceMotion ? ' app-shell--reduce-motion' : ''}${forceMotion ? ' app-shell--force-motion' : ''}`}>
     <ConnectionBadge status={state.connection} networkOnline={state.networkOnline} />
     {state.notice && <div className="notice" role="alert" onClick={() => state.setNotice(null)}>{state.notice}<span>×</span></div>}
-    {state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} audioMuted={audioMuted} lowPowerActive={lowPowerActive} reduceMotion={reduceMotion} onToggleAudio={() => setAudioMuted((value) => !value)} onToggleLowPower={() => setManualLowPower((value) => !value)} onToggleReduceMotion={() => setMotionPreference(() => reduceMotion ? 'full' : 'reduced')} onPlay={playCards} onChallenge={challenge} onRestart={restartGame} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
+    {(state.connection !== 'connected' || !state.networkOnline) && <div className="network-overlay" aria-live="polite">{state.networkOnline ? '正在重新连接服务器…' : '网络已断开，正在等待恢复…'}</div>}
+    {screen === 'game' && state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} audioMuted={audioMuted} lowPowerActive={lowPowerActive} reduceMotion={reduceMotion} onToggleAudio={() => setAudioMuted((value) => !value)} onToggleLowPower={() => setManualLowPower((value) => !value)} onToggleReduceMotion={() => setMotionPreference(() => reduceMotion ? 'full' : 'reduced')} onPlay={playCards} onChallenge={challenge} onReturnToRoom={returnToRoom} onLeaveRoom={leaveRoom} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V6.3 · 原创酒馆视觉 · 不含第三方游戏版权素材</footer>
-  </div>;
+    <footer>V6.6 · 原创酒馆视觉 · 不含第三方游戏版权素材</footer>
+  </div></ErrorBoundary>;
 }

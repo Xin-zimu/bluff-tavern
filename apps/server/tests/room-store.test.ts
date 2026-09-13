@@ -53,11 +53,45 @@ describe('RoomStore', () => {
     expect(resumed.room.players.find((player) => player.id === guest.playerId)?.isConnected).toBe(true);
   });
 
-  it('keeps character selection unique in the lobby', () => {
+  it('keeps an active-game leaver as disconnected and transfers host', () => {
     const store = new RoomStore(() => 4);
+    const host = store.create('狼', 'socket-a');
+    const guest = store.join(host.room.code, '狐狸', 'socket-b');
+    store.setReady(host.room.code, host.playerId, true);
+    store.setReady(host.room.code, guest.playerId, true);
+    store.startGame(host.room.code, host.playerId);
+
+    const left = store.leaveBySocket('socket-a');
+
+    expect(left?.room?.players).toHaveLength(2);
+    expect(left?.room?.hostPlayerId).toBe(guest.playerId);
+    expect(left?.room?.players.find((player) => player.id === host.playerId)).toMatchObject({
+      isConnected: false,
+      status: 'DISCONNECTED',
+    });
+  });
+
+  it('keeps character selection unique in the lobby', () => {
+    const store = new RoomStore(() => 5);
     const host = store.create('狼', 'socket-a');
     const guest = store.join(host.room.code, '狐狸', 'socket-b');
     expect(store.selectCharacter(host.room.code, host.playerId, 'WOLF').players[0]?.characterId).toBe('WOLF');
     expect(() => store.selectCharacter(host.room.code, guest.playerId, 'WOLF')).toThrow('该角色已被其他玩家选择');
+  });
+
+  it('returns a finished game to lobby and clears player readiness', () => {
+    const store = new RoomStore(() => 6);
+    const host = store.create('狼', 'socket-a');
+    const guest = store.join(host.room.code, '狐狸', 'socket-b');
+    store.setReady(host.room.code, host.playerId, true);
+    store.setReady(host.room.code, guest.playerId, true);
+    store.startGame(host.room.code, host.playerId);
+    store.finishGame(host.room.code);
+
+    const room = store.returnToLobby(host.room.code, guest.playerId);
+
+    expect(room.status).toBe('LOBBY');
+    expect(room.hostPlayerId).toBe(host.playerId);
+    expect(room.players.every((player) => player.status === 'CONNECTED')).toBe(true);
   });
 });

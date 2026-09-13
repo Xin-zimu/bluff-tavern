@@ -192,14 +192,14 @@ Clients use these fields to calculate the current animation progress. A late cli
 Default server phase durations:
 
 - `MATCH_START`: implementation-defined, short.
-- `ROUND_START`: 1200 ms.
-- `CHALLENGE_CALLOUT`: 650 ms.
-- `REVEAL`: `400 + revealedCardCount * 350` ms.
-- `VERDICT`: 850 ms.
+- `ROUND_START`: 2700 ms.
+- `CHALLENGE_CALLOUT`: 1800 ms.
+- `REVEAL`: `900 + revealedCardCount * 650` ms.
+- `VERDICT`: 1300 ms.
 - `PUNISHMENT_INTRO`: 900 ms.
 - `PUNISHMENT_TRIGGER`: 550 ms.
 - `PUNISHMENT_RESULT`: 1100 ms for dry fire, 1500 ms for hit.
-- `ROUND_END`: 700 ms.
+- `ROUND_END`: 900 ms.
 - `GAME_OVER`: persistent until restart.
 
 Normal card-play animation is client-side and should last about 250 to 350 ms. The server may advance the turn immediately after accepting a legal play.

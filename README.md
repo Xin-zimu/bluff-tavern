@@ -1,6 +1,6 @@
 # 诡牌酒馆 / Bluff Tavern
 
-手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V6.3**：2–8 人服务器权威诈唬核心循环，按 Match、Round、Turn 状态机推进，含分阶段质疑、翻牌、判定、独立左轮、淘汰、胜利、强化重连恢复、原创惩罚演出资产、整局演出设置、PWA 与部署资产。
+手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V6.6**：2–8 人服务器权威诈唬核心循环，按 Match、Round、Turn 状态机推进，含完整房间返回流程、目标牌 HUD、当前玩家聚焦、分阶段质疑、真实翻牌、判定、独立左轮、淘汰、胜利、重连恢复、规则面板、异常兜底、原创演出资产、PWA 与部署资产。
 
 ## 技术栈
 
@@ -50,7 +50,7 @@ docs/                     架构、协议与验收记录
 
 - 状态仅在内存中；服务重启会清空房间。
 - 牌局或结算阶段的意外断线会保留座位；浏览器用本地 `sessionToken` 在重新打开、网络恢复或从后台回到前台后恢复同一玩家身份。Token 只存浏览器本机、不写日志、不会出现在公开房间状态中。
-- V6.0 只开放 Classic 和 Quick；Party、Custom、随机事件和道具暂时关闭。
+- V6 只开放 Classic 和 Quick；Party、Custom、随机事件、道具、角色技能和经济系统保留到 V7。
 - 房主离开后会转移给最早入席的剩余玩家；修改最大人数会取消所有人的准备状态。
 - 内存状态在服务器重启后仍会清空；聊天、数据库和多实例扩展尚未实现。
 
@@ -58,4 +58,4 @@ docs/                     架构、协议与验收记录
 
 V1.0 提供最小 Nginx 与 systemd 模板：[`deploy/nginx/bluff-tavern.conf`](deploy/nginx/bluff-tavern.conf)、[`deploy/systemd/bluff-tavern.service`](deploy/systemd/bluff-tavern.service) 和 [`scripts/build-release.sh`](scripts/build-release.sh)。部署前必须替换示例域名并配置 HTTPS；具体步骤见 [`docs/deployment.md`](docs/deployment.md)。
 
-详见 [`docs/GAME_RULES_V6.md`](docs/GAME_RULES_V6.md)、[`docs/GAME_STATE_MACHINE_V6.md`](docs/GAME_STATE_MACHINE_V6.md)、[`docs/GAME_PROTOCOL_V6.md`](docs/GAME_PROTOCOL_V6.md)、[`docs/GAME_ANIMATION_V6.md`](docs/GAME_ANIMATION_V6.md) 与 [`docs/V6.3-acceptance.md`](docs/V6.3-acceptance.md)。
+详见 [`docs/GAME_RULES_V6.md`](docs/GAME_RULES_V6.md)、[`docs/GAME_STATE_MACHINE_V6.md`](docs/GAME_STATE_MACHINE_V6.md)、[`docs/GAME_PROTOCOL_V6.md`](docs/GAME_PROTOCOL_V6.md)、[`docs/GAME_ANIMATION_V6.md`](docs/GAME_ANIMATION_V6.md) 与 [`docs/V6.6-acceptance.md`](docs/V6.6-acceptance.md)。

@@ -5,7 +5,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { Server } from 'socket.io';
-import type { ClientToServerEvents, InterServerEvents, ServerToClientEvents, SocketData } from '@bluff-tavern/shared';
+import { APP_VERSION, type ClientToServerEvents, type InterServerEvents, type ServerToClientEvents, type SocketData } from '@bluff-tavern/shared';
 import type { ServerConfig } from './config/env.js';
 import { RoomStore } from './rooms/room-store.js';
 import { registerRoomHandlers } from './socket/register-room-handlers.js';
@@ -44,9 +44,9 @@ async function sendWebFile(reply: FastifyReply, filePath: string, cacheControl: 
 }
 
 export async function createApp(config: ServerConfig) {
+  const startedAt = Date.now();
   const app = Fastify({ logger: { level: config.logLevel } });
   await app.register(cors, { origin: config.clientOrigin });
-  app.get('/health', () => ({ status: 'ok', version: '6.3.0', timestamp: Date.now() }));
   if (config.webRoot) {
     const webRoot = resolve(config.webRoot);
     const webRootPrefix = `${webRoot}${sep}`;
@@ -79,6 +79,16 @@ export async function createApp(config: ServerConfig) {
   const rooms = new RoomStore();
   const games = new GameService(cryptoRandom);
   const scheduler = new GameScheduler();
+  app.get('/health', () => ({
+    status: 'ok',
+    version: APP_VERSION,
+    uptime: Math.floor((Date.now() - startedAt) / 1_000),
+    rooms: rooms.getStats().rooms,
+    connections: rooms.getStats().connections,
+    players: rooms.getStats().players,
+    matches: games.getStats().matches,
+    timestamp: Date.now(),
+  }));
   io.on('connection', (socket) => registerRoomHandlers(io, socket, rooms, games, scheduler, app.log));
   app.addHook('onClose', () => io.close());
   return { app, io, rooms };

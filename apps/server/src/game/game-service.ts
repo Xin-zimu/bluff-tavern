@@ -70,13 +70,15 @@ export interface PhaseAdvanceResult {
 
 const targets = ['A', 'K', 'Q'] as const;
 
-const phaseDurations = {
-  ROUND_START: 1_200,
-  CHALLENGE_CALLOUT: 800,
-  VERDICT: 1_000,
+const cinematicTiming = {
+  ROUND_START: 2_700,
+  CHALLENGE_CALLOUT: 1_800,
+  VERDICT: 1_300,
   PUNISHMENT_INTRO: 1_050,
   PUNISHMENT_TRIGGER: 700,
-  ROUND_END: 800,
+  ROUND_END: 900,
+  REVEAL_BASE: 900,
+  REVEAL_PER_CARD: 650,
 } as const;
 
 export class GameService {
@@ -125,6 +127,14 @@ export class GameService {
 
   restart(room: RoomView): GameSnapshot {
     return this.start(room);
+  }
+
+  end(roomCode: string): void {
+    this.games.delete(roomCode);
+  }
+
+  getStats(): { matches: number } {
+    return { matches: this.games.size };
   }
 
   playCards(roomCode: string, playerId: string, cardIndexes: number[]): PlayCardsResult {
@@ -181,7 +191,7 @@ export class GameService {
     if (wasBluff) game.successfulChallenges += 1;
     else game.failedChallenges += 1;
     game.mustChallenge = false;
-    this.enterPhase(game, 'CHALLENGE_CALLOUT', phaseDurations.CHALLENGE_CALLOUT);
+    this.enterPhase(game, 'CHALLENGE_CALLOUT', cinematicTiming.CHALLENGE_CALLOUT);
 
     const state = this.getView(roomCode, challengerId);
     return {
@@ -230,13 +240,13 @@ export class GameService {
         this.enterPhase(game, 'REVEAL', this.revealDurationMs(game));
         break;
       case 'REVEAL':
-        this.enterPhase(game, 'VERDICT', phaseDurations.VERDICT);
+        this.enterPhase(game, 'VERDICT', cinematicTiming.VERDICT);
         break;
       case 'VERDICT':
-        this.enterPhase(game, 'PUNISHMENT_INTRO', phaseDurations.PUNISHMENT_INTRO);
+        this.enterPhase(game, 'PUNISHMENT_INTRO', cinematicTiming.PUNISHMENT_INTRO);
         break;
       case 'PUNISHMENT_INTRO':
-        this.enterPhase(game, 'PUNISHMENT_TRIGGER', phaseDurations.PUNISHMENT_TRIGGER);
+        this.enterPhase(game, 'PUNISHMENT_TRIGGER', cinematicTiming.PUNISHMENT_TRIGGER);
         break;
       case 'PUNISHMENT_TRIGGER':
         ({ eliminatedPlayerId } = this.publishPunishmentResult(game));
@@ -252,7 +262,7 @@ export class GameService {
         this.enterPhase(game, 'PUNISHMENT_RESULT', game.pendingChallenge?.hit ? 1_650 : 1_250);
         break;
       case 'PUNISHMENT_RESULT':
-        this.enterPhase(game, 'ROUND_END', phaseDurations.ROUND_END);
+        this.enterPhase(game, 'ROUND_END', cinematicTiming.ROUND_END);
         break;
       case 'ROUND_END':
         if (game.alivePlayerIds.size <= 1) {
@@ -380,7 +390,7 @@ export class GameService {
     game.pendingChallenge = null;
     game.punishment = null;
     game.discardCount = 0;
-    this.enterPhase(game, 'ROUND_START', phaseDurations.ROUND_START);
+    this.enterPhase(game, 'ROUND_START', cinematicTiming.ROUND_START);
   }
 
   private publishPunishmentResult(game: InternalGame): { eliminatedPlayerId: string | null } {
@@ -477,7 +487,7 @@ export class GameService {
   }
 
   private revealDurationMs(game: InternalGame): number {
-    return 500 + (game.pendingChallenge?.revealedCards.length ?? 0) * 400;
+    return cinematicTiming.REVEAL_BASE + (game.pendingChallenge?.revealedCards.length ?? 0) * cinematicTiming.REVEAL_PER_CARD;
   }
 
   private turnDurationMs(game: InternalGame): number {

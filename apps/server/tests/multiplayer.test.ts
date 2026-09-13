@@ -25,7 +25,7 @@ function waitForGameState(client: ClientSocket<ServerToClientEvents, ClientToSer
     const timer = setTimeout(() => {
       client.off('game:snapshot', onState);
       reject(new Error('Timed out waiting for game state'));
-    }, 3_000);
+    }, 6_000);
     const onState = (state: GameView) => {
       if (!predicate(state)) return;
       clearTimeout(timer);
