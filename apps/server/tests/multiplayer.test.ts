@@ -37,6 +37,31 @@ function waitForGameState(client: ClientSocket<ServerToClientEvents, ClientToSer
 }
 
 describe('real Socket.IO multiplayer', () => {
+  it('closes promptly while Socket.IO clients are still connected', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    let closePromise: Promise<void> | null = null;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'CloseCheck' });
+      expect(created.ok).toBe(true);
+
+      closePromise = app.close();
+      await expect(Promise.race([
+        closePromise.then(() => 'closed'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for app.close()')), 1_500)),
+      ])).resolves.toBe('closed');
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      if (closePromise) await closePromise.catch(() => undefined);
+      else await app.close().catch(() => undefined);
+    }
+  });
+
   it('synchronizes eight clients and restores a disconnected eighth seat', async () => {
     const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
     await app.listen({ host: '127.0.0.1', port: 0 });

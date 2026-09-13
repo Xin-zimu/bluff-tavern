@@ -90,6 +90,8 @@ export async function createApp(config: ServerConfig) {
     timestamp: Date.now(),
   }));
   io.on('connection', (socket) => registerRoomHandlers(io, socket, rooms, games, scheduler, app.log));
-  app.addHook('onClose', () => io.close());
+  app.addHook('preClose', async () => {
+    await io.close();
+  });
   return { app, io, rooms };
 }
