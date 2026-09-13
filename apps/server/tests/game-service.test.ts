@@ -90,6 +90,17 @@ describe('V6 GameService rules', () => {
     expect(verdict.punishment).toBeNull();
   });
 
+  it('holds reveal long enough for every card to flip before verdict', () => {
+    const room = makeRoom(2);
+    const service = deterministic();
+    forceChallenge(service, room, ['A', 'K', 'Q']);
+
+    const reveal = service.advancePhase(room.code).state;
+
+    expect(reveal.phase).toBe('REVEAL');
+    expect((reveal.phaseEndsAt ?? 0) - reveal.phaseStartedAt).toBe(3_750);
+  });
+
   it('treats Joker as true and mixed truth/bluff as bluff', () => {
     const room = makeRoom(2);
     const jokerService = deterministic();

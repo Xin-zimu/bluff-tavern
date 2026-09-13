@@ -77,8 +77,9 @@ const cinematicTiming = {
   PUNISHMENT_INTRO: 1_050,
   PUNISHMENT_TRIGGER: 700,
   ROUND_END: 900,
-  REVEAL_BASE: 900,
-  REVEAL_PER_CARD: 650,
+  REVEAL_INTRO: 500,
+  REVEAL_PER_CARD: 750,
+  REVEAL_FINAL_HOLD: 1_000,
 } as const;
 
 export class GameService {
@@ -487,7 +488,9 @@ export class GameService {
   }
 
   private revealDurationMs(game: InternalGame): number {
-    return cinematicTiming.REVEAL_BASE + (game.pendingChallenge?.revealedCards.length ?? 0) * cinematicTiming.REVEAL_PER_CARD;
+    return cinematicTiming.REVEAL_INTRO
+      + (game.pendingChallenge?.revealedCards.length ?? 0) * cinematicTiming.REVEAL_PER_CARD
+      + cinematicTiming.REVEAL_FINAL_HOLD;
   }
 
   private turnDurationMs(game: InternalGame): number {

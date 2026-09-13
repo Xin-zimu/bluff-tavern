@@ -23,6 +23,12 @@ const phaseLabels: Record<GamePhase, string> = {
   GAME_OVER: '最终胜者',
 };
 
+const REVEAL_TIMING = {
+  intro: 500,
+  perCard: 750,
+  finalHold: 1_000,
+} as const;
+
 export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
   if (game.phase === 'TURN') return null;
   const elapsed = Math.max(0, now - game.phaseStartedAt);
@@ -41,7 +47,7 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
       <p className="cinematic__phase">{phaseLabels[game.phase]}</p>
       {game.phase === 'ROUND_START' && <RoundIntro game={game} progress={progress} />}
       {game.phase === 'CHALLENGE_CALLOUT' && <Callout challenger={challenger} challenged={challenged} />}
-      {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} targetRank={game.targetRank} progress={progress} />}
+      {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} targetRank={game.targetRank} elapsed={elapsed} />}
       {game.phase === 'VERDICT' && <Verdict game={game} punished={punished} />}
       {game.phase === 'PUNISHMENT_INTRO' && <RevolverBeat title={punished} subtitle="弹巢旋转" chamber={null} />}
       {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle="扣动扳机" chamber={null} tense />}
@@ -75,10 +81,11 @@ function Callout({ challenger, challenged }: { challenger: string; challenged: s
   </div>;
 }
 
-function Reveal({ cards, targetRank, progress }: { cards: CardRank[]; targetRank: GameView['targetRank']; progress: number }) {
-  return <div className={`reveal-cards ${progress > 0.84 ? 'is-settled' : ''}`}>
+function Reveal({ cards, targetRank, elapsed }: { cards: CardRank[]; targetRank: GameView['targetRank']; elapsed: number }) {
+  const settledAt = REVEAL_TIMING.intro + cards.length * REVEAL_TIMING.perCard;
+  return <div className={`reveal-cards ${elapsed >= settledAt ? 'is-settled' : ''}`}>
     {cards.map((card, index) => {
-      const visible = progress >= (index + 1) / Math.max(cards.length, 1) - 0.12;
+      const visible = elapsed >= REVEAL_TIMING.intro + index * REVEAL_TIMING.perCard;
       const honest = card === targetRank || card === 'JOKER';
       return <div key={`${card}-${index}`} className={`reveal-card reveal-card--${card.toLowerCase()} ${visible ? 'is-flipped' : ''} ${honest ? 'is-honest' : 'is-bluff'}`} style={{ '--card-index': index } as CSSProperties}>
         <span className="reveal-card__back">?</span>
@@ -113,7 +120,7 @@ function RevolverBeat({ title, subtitle, chamber, tense = false, result }: { tit
 
 function PunishmentResult({ result, punished }: { result: GameView['punishment']; punished: string }) {
   return <div className={`punishment-result ${result?.hit ? 'is-hit' : 'is-dry'}`}>
-    <RevolverBeat title={result?.hit ? '砰！' : '咔哒'} subtitle={result?.hit ? `${punished} 已淘汰` : `${punished} 暂时安全`} chamber={result?.chamber ?? null} result={result} />
+    <RevolverBeat title={result?.hit ? '这一发有子弹' : '这一发没有子弹'} subtitle={result?.hit ? `${punished} 已淘汰` : `${punished} 暂时安全`} chamber={result?.chamber ?? null} result={result} />
   </div>;
 }
 

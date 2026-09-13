@@ -11,7 +11,7 @@ describe('V1.5 PWA assets', () => {
     expect(manifest.display).toBe('standalone');
     expect(manifest.icons[0]?.src).toBe('/icons/app-icon.svg');
     expect(worker).toContain("caches.open(CACHE)");
-    expect(worker).toContain('bluff-tavern-v6.6-core1');
+    expect(worker).toContain('bluff-tavern-v6.7-core1');
     expect(icon).toContain('<svg');
   });
 });

@@ -194,7 +194,7 @@ Default server phase durations:
 - `MATCH_START`: implementation-defined, short.
 - `ROUND_START`: 2700 ms.
 - `CHALLENGE_CALLOUT`: 1800 ms.
-- `REVEAL`: `900 + revealedCardCount * 650` ms.
+- `REVEAL`: `500 + revealedCardCount * 750 + 1000` ms. The final 1000 ms hold ensures every revealed card is visible before `VERDICT`.
 - `VERDICT`: 1300 ms.
 - `PUNISHMENT_INTRO`: 900 ms.
 - `PUNISHMENT_TRIGGER`: 550 ms.
