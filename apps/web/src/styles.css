@@ -57,6 +57,17 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .ready-mark { margin-left: auto; font-size: .65rem; color: #9ed18c; border: 1px solid #527845; padding: 3px 5px; }
 .settings-control { display: flex; justify-content: space-between; align-items: center; margin: 16px 0; color: #c8b9a1; }
 .settings-control select { min-height: 38px; border: 1px solid #6e625b; color: #f2c777; background: #120d0b; padding: 0 10px; }
+.mode-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.mode-selector button { min-width: 0; min-height: 92px; display: grid; align-content: start; gap: 8px; padding: 12px; text-align: left; color: #c8b9a1; border: 1px solid rgba(110,98,91,.72); border-radius: 7px; background: linear-gradient(145deg, rgba(23,17,15,.94), rgba(10,7,6,.88)); cursor: pointer; }
+.mode-selector button:hover:not(:disabled) { border-color: #d4a85d; box-shadow: inset 0 0 18px rgba(242,199,119,.06), 0 9px 18px rgba(0,0,0,.24); transform: translateY(-1px); }
+.mode-selector button.selected { color: #ffe1a1; border-color: #f2c777; background: linear-gradient(145deg, rgba(91,31,40,.74), rgba(31,18,14,.96)); box-shadow: inset 0 0 0 1px rgba(166,124,61,.58), 0 0 18px rgba(242,199,119,.14); }
+.mode-selector button:disabled { opacity: .5; cursor: not-allowed; }
+.mode-selector--readonly button { cursor: default; }
+.mode-selector--readonly button:not(.selected) { opacity: .38; }
+.mode-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mode-card__top strong { min-width: 0; overflow-wrap: anywhere; color: inherit; font-size: .86rem; }
+.mode-card__top small { flex: 0 0 auto; color: #d4a85d; font-size: .64rem; border: 1px solid rgba(166,124,61,.52); padding: 2px 5px; }
+.mode-selector button > span:last-child { color: #a99b8d; font-size: .72rem; line-height: 1.35; }
 .feature-switches { display: grid; gap: 8px; margin: 14px 0 16px; padding: 12px; border: 1px solid rgba(166,124,61,.34); border-radius: 6px; background: rgba(0,0,0,.16); }
 .feature-switch { min-height: 38px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin: 0; color: #c8b9a1; cursor: pointer; }
 .feature-switch input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
@@ -95,7 +106,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
   .home, .lobby { grid-template-columns: 1fr; }
   .home { margin-top: 4vh; }.emblem { width: 180px; height: 98px; }.hero h1 { font-size: 3rem; }.tagline { font-size: .9rem; }
   .lobby { padding-top: 5px; }.lobby-header { text-align: center; }.lobby-header .button { width: 100%; }
-  .player-panel { grid-column: 1; grid-row: auto; }.player-list { grid-template-columns: 1fr; }.character-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }.character-picker button { height: 108px; }.character-picker button img { height: 72px; }
+  .player-panel { grid-column: 1; grid-row: auto; }.player-list { grid-template-columns: 1fr; }.mode-selector { grid-template-columns: repeat(2, minmax(0, 1fr)); }.character-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }.character-picker button { height: 108px; }.character-picker button img { height: 72px; }
 }
 @media (max-height: 540px) and (orientation: landscape) {
   .app-shell { padding-top: max(44px, env(safe-area-inset-top)); }.home { grid-template-columns: .8fr 1.2fr; gap: 22px; }
@@ -125,6 +136,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .card span { position: relative; z-index: 1; text-shadow: 0 1px #fff6; }
 .card img { width: 100%; height: 100%; object-fit: cover; }
 .card.selected { box-shadow: inset 0 0 0 3px #6e4029, 0 16px 22px #000b, 0 0 16px rgba(242,199,119,.22); }
+.mode-rule { width: fit-content; max-width: min(100%, 520px); min-height: 34px; display: grid; place-items: center; margin: 12px auto -8px; padding: 7px 14px; color: #ffd8d1; border: 1px solid rgba(143,61,57,.66); border-radius: 999px; background: rgba(91,31,40,.42); font-size: .82rem; font-weight: 850; }
 
 .button--art-start,
 .button--art-challenge { min-height: 60px; border: 0; border-radius: 0; color: #fff0c9; background-color: transparent; background-position: center; background-size: 100% 100%; background-repeat: no-repeat; text-shadow: 0 2px 3px #000, 0 0 9px rgba(255,214,128,.28); }

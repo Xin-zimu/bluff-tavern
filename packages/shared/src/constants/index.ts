@@ -1,5 +1,5 @@
 export const ROOM_CODE_LENGTH = 6;
-export const APP_VERSION = '7.0.0';
+export const APP_VERSION = '7.1.0';
 export const ROOM_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const MIN_NICKNAME_LENGTH = 1;
 export const MAX_NICKNAME_LENGTH = 16;
@@ -16,6 +16,8 @@ export const REVOLVER_BULLETS_BY_PLAYER_COUNT = [
   { maxPlayers: 8, bullets: 2 },
 ] as const;
 export const MAX_CARDS_PER_PLAY = 3;
+export const GAME_MODES = ['CLASSIC', 'QUICK', 'PARTY', 'FREE_CHALLENGE', 'SHARED_REVOLVER', 'ESCALATION', 'CUSTOM'] as const;
+export const PLAYABLE_GAME_MODES = ['CLASSIC', 'QUICK', 'ESCALATION'] as const;
 export const CHARACTER_IDS = ['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA'] as const;
 export const ITEM_IDS = ['SPYGLASS', 'SWAP_GLOVE', 'WAX_SEAL', 'TAVERN_MUG', 'POCKET_WATCH'] as const;
 export const V7_ITEM_IDS = ['SPYGLASS', 'POCKET_WATCH', 'TAVERN_MUG'] as const;

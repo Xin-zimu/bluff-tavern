@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MAX_CARDS_PER_PLAY, MAX_NICKNAME_LENGTH, MAX_PLAYERS, MIN_NICKNAME_LENGTH, MIN_PLAYERS, ROOM_CODE_LENGTH, V7_ITEM_IDS } from '../constants/index.js';
+import { MAX_CARDS_PER_PLAY, MAX_NICKNAME_LENGTH, MAX_PLAYERS, MIN_NICKNAME_LENGTH, MIN_PLAYERS, PLAYABLE_GAME_MODES, ROOM_CODE_LENGTH, V7_ITEM_IDS } from '../constants/index.js';
 import type { Ack, GameCue, GameSnapshot, GameView, RoomMembership, RoomPlayerEvent, RoomView, SessionResumeResult } from '../types/index.js';
 
 export const nicknameSchema = z.string().trim().min(MIN_NICKNAME_LENGTH).max(MAX_NICKNAME_LENGTH);
@@ -17,7 +17,7 @@ export const v7ExtensionSettingsPatchSchema = z.object({
 export const updateRoomSettingsSchema = z.object({
   roomCode: roomCodeSchema,
   maxPlayers: z.number().int().min(MIN_PLAYERS).max(MAX_PLAYERS),
-  gameMode: z.enum(['CLASSIC', 'QUICK']).default('CLASSIC'),
+  gameMode: z.enum(PLAYABLE_GAME_MODES).default('CLASSIC'),
   turnDurationSeconds: z.number().int().min(5).max(30).optional(),
   eventEnabled: z.boolean().optional(),
   bulletCount: z.number().int().min(1).max(5).nullable().optional(),

@@ -123,6 +123,54 @@ describe('real Socket.IO multiplayer', () => {
     }
   });
 
+  it('starts and synchronizes a real Escalation mode turn', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'HostMode' });
+      if (!created.ok) throw new Error(created.error.message);
+      const guest = await connect(url);
+      const joined = await emitAck<RoomMembership>(guest, 'room:join', { nickname: 'GuestMode', roomCode: created.data.room.code });
+      if (!joined.ok) throw new Error(joined.error.message);
+      const settings = await emitAck<RoomView>(host, 'room:updateSettings', {
+        roomCode: created.data.room.code,
+        maxPlayers: 2,
+        gameMode: 'ESCALATION',
+        requestId: randomUUID(),
+      });
+      expect(settings).toMatchObject({ ok: true, data: { settings: { gameMode: 'ESCALATION', turnDurationSeconds: 15 } } });
+      await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
+        roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
+      })));
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(started).toMatchObject({ ok: true, data: { gameMode: 'ESCALATION', minimumPlayCount: 1 } });
+      const turn = await waitForGameState(host, (state) => state.phase === 'TURN' && state.gameMode === 'ESCALATION');
+      if (!turn.turnPlayerId) throw new Error('Missing turn player');
+      const clientsByPlayer = new Map<string, ClientSocket<ServerToClientEvents, ClientToServerEvents>>([
+        [created.data.playerId, host],
+        [joined.data.playerId, guest],
+      ]);
+      const turnClient = clientsByPlayer.get(turn.turnPlayerId);
+      if (!turnClient) throw new Error('Missing turn client');
+
+      const played = await emitAck<GameView>(turnClient, 'game:playCards', {
+        roomCode: created.data.room.code,
+        cardIndexes: [0, 1],
+        requestId: randomUUID(),
+      });
+
+      expect(played).toMatchObject({ ok: true, data: { gameMode: 'ESCALATION', lastPlay: { count: 2 }, minimumPlayCount: 2 } });
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
   it('uses a V7 item through the real Socket.IO flow', async () => {
     const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
     await app.listen({ host: '127.0.0.1', port: 0 });

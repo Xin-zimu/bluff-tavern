@@ -57,7 +57,7 @@ React screen
 
 ## V7.0 扩展开关
 
-`RoomSettings.v7` 在大厅由房主权限保护，开局时复制到 `InternalGame` 并在本局冻结。三个扩展开关分别控制道具、酒馆事件和角色能力，默认全部关闭；Classic 和 Quick 仍是唯一可开局模式。旧客户端不传 `settings.v7` 时，Socket 层按现有值合并，避免意外开启新玩法。
+`RoomSettings.v7` 在大厅由房主权限保护，开局时复制到 `InternalGame` 并在本局冻结。三个扩展开关分别控制道具、酒馆事件和角色能力，默认全部关闭；旧客户端不传 `settings.v7` 时，Socket 层按现有值合并，避免意外开启新玩法。
 
 ## V7.0 内容系统
 
@@ -66,6 +66,12 @@ React screen
 酒馆事件只在 `tavernEventsEnabled` 开启时由服务器每轮小概率抽取，事件写入公开 `GameView.tavernEvent`。快速夜缩短本轮权威回合时间；烛火摇曳和双倍危机只改变演出时长和视觉压力，不改变诈唬判定或实弹数量。
 
 角色能力只在 `characterAbilitiesEnabled` 开启时触发，效果写入对应 viewer 的 `GameView.abilityEffect` 私有快照。V7.0 第一版只做私有提示、轻量回合延时和道具协同，不提供主动技能按钮、技能响应窗口、他人手牌窥视或惩罚抵消。
+
+## V7.1 多模式基础
+
+共享类型中的 `GameMode` 保留 Classic、Quick、Party、Free Challenge、Shared Revolver、Escalation 和 Custom 的完整路线，但 `PLAYABLE_GAME_MODES` 与 `updateRoomSettingsSchema` 只开放已经实现的 Classic、Quick 和 Escalation。大厅可以展示后续模式为计划中状态，但未开放模式无法通过 Socket 设置进入开局。
+
+Escalation / 加注模式继续复用同一 `GameService` 状态机，只在出牌校验处增加 `minimumPlayCount`：首手最低 1 张，之后等于上一手出牌数。若下一位玩家手牌数低于当前最低数，服务器把 `mustChallenge` 置为 true，并通过私有/公开快照统一驱动前端提示、按钮禁用和超时自动质疑。
 
 ## V4.0 表现层
 

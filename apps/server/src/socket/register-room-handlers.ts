@@ -149,7 +149,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       const room = rooms.updateSettings(parsed.data.roomCode, socket.data.playerId!, {
         maxPlayers: parsed.data.maxPlayers,
         gameMode: parsed.data.gameMode,
-        turnDurationSeconds: parsed.data.gameMode === 'QUICK' ? 7 : (parsed.data.turnDurationSeconds ?? previous.settings.turnDurationSeconds),
+        turnDurationSeconds: turnDurationForMode(parsed.data.gameMode, parsed.data.turnDurationSeconds ?? previous.settings.turnDurationSeconds),
         eventEnabled: false,
         bulletCount: null,
         v7: mergeV7Settings(previous.settings.v7, parsed.data.v7),
@@ -451,4 +451,9 @@ function mergeV7Settings(previous: RoomView['settings']['v7'], patch: V7Settings
     tavernEventsEnabled: patch?.tavernEventsEnabled ?? previous.tavernEventsEnabled,
     characterAbilitiesEnabled: patch?.characterAbilitiesEnabled ?? previous.characterAbilitiesEnabled,
   };
+}
+
+function turnDurationForMode(gameMode: RoomView['settings']['gameMode'], requestedSeconds: number): number {
+  if (gameMode === 'QUICK') return 7;
+  return gameMode === 'CLASSIC' || gameMode === 'ESCALATION' ? 15 : requestedSeconds;
 }

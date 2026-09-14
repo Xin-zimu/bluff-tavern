@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CardRank, CharacterId, RoomView, V7ExtensionSettings } from '@bluff-tavern/shared';
+import type { CardRank, CharacterId, PlayableGameMode, RoomView, V7ExtensionSettings } from '@bluff-tavern/shared';
 import { GameService } from '../src/game/game-service.js';
 
 const defaultV7: V7ExtensionSettings = { itemsEnabled: false, tavernEventsEnabled: false, characterAbilitiesEnabled: false };
@@ -8,14 +8,14 @@ function makeV7(overrides: Partial<V7ExtensionSettings>): V7ExtensionSettings {
   return { ...defaultV7, ...overrides };
 }
 
-function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings = defaultV7, characters: Array<CharacterId | null> = []): RoomView {
+function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings = defaultV7, characters: Array<CharacterId | null> = [], gameMode: PlayableGameMode = 'CLASSIC'): RoomView {
   return {
     id: code,
     code,
     hostPlayerId: 'p1',
     status: 'PLAYING',
     maxPlayers: playerCount,
-    settings: { maxPlayers: playerCount, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null, v7: { ...v7 } },
+    settings: { maxPlayers: playerCount, gameMode, turnDurationSeconds: gameMode === 'QUICK' ? 7 : 15, eventEnabled: false, bulletCount: null, v7: { ...v7 } },
     createdAt: 1,
     players: Array.from({ length: playerCount }, (_, index) => ({
       id: `p${index + 1}`,
@@ -148,6 +148,49 @@ describe('V6 GameService rules', () => {
     expect(result.state.lastPlay).toMatchObject({ playerId: 'p1', count: 1 });
     expect(result.state.turnPlayerId).toBe('p2');
     expect(result.cues).toMatchObject([{ type: 'CARD_PLAYED', playerId: 'p1', count: 1 }]);
+  });
+
+  it('enforces the escalation minimum play count from the previous hand', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'ESCALATION');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q', 'JOKER', 'A']);
+    service.debugSetHand(room.code, 'p2', ['A', 'K', 'Q', 'JOKER', 'A']);
+
+    const firstPlay = service.playCards(room.code, 'p1', [0, 1]).state;
+
+    expect(firstPlay).toMatchObject({ gameMode: 'ESCALATION', lastPlay: { playerId: 'p1', count: 2 }, minimumPlayCount: 2, turnPlayerId: 'p2' });
+    expect(() => service.playCards(room.code, 'p2', [0])).toThrow('至少选择 2 张牌');
+    const response = service.playCards(room.code, 'p2', [0, 1]).state;
+    expect(response).toMatchObject({ lastPlay: { playerId: 'p2', count: 2 }, minimumPlayCount: 2, turnPlayerId: 'p1' });
+  });
+
+  it('forces an escalation challenge when the next player cannot match the minimum', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'ESCALATION');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q', 'JOKER', 'A']);
+    service.debugSetHand(room.code, 'p2', ['A', 'K']);
+
+    const played = service.playCards(room.code, 'p1', [0, 1, 2]).state;
+
+    expect(played).toMatchObject({ mustChallenge: true, minimumPlayCount: 3, turnPlayerId: 'p2' });
+    expect(() => service.playCards(room.code, 'p2', [0, 1])).toThrow('必须质疑');
+    expect(service.autoAct(room.code).state.phase).toBe('CHALLENGE_CALLOUT');
+  });
+
+  it('auto-plays the current escalation minimum on timeout', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'ESCALATION');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q', 'JOKER', 'A']);
+    service.debugSetHand(room.code, 'p2', ['A', 'K', 'Q', 'JOKER', 'A']);
+    service.playCards(room.code, 'p1', [0, 1]);
+
+    const result = service.advancePhase(room.code);
+
+    expect(result.state).toMatchObject({ lastPlay: { playerId: 'p2', count: 2 }, minimumPlayCount: 2, turnPlayerId: 'p1' });
+    expect(result.cues).toMatchObject([{ type: 'CARD_PLAYED', playerId: 'p2', count: 2 }]);
   });
 
   it('locks gameplay actions during cinematic phases', () => {

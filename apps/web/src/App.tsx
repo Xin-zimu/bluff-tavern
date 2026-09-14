@@ -6,7 +6,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
-import type { RoomSettings, RoomView, V6GameMode } from '@bluff-tavern/shared';
+import type { PlayableGameMode, RoomSettings, RoomView } from '@bluff-tavern/shared';
 
 type MotionPreference = 'system' | 'full' | 'reduced';
 
@@ -151,7 +151,7 @@ export function App() {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
-  const updateSettings = (settings: RoomSettings & { gameMode: V6GameMode }) => {
+  const updateSettings = (settings: RoomSettings & { gameMode: PlayableGameMode }) => {
     if (!state.room) return;
     socket.emit('room:updateSettings', { roomCode: state.room.code, ...settings, requestId: requestId() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);
@@ -240,6 +240,6 @@ export function App() {
     {screen === 'game' && state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} audioMuted={audioMuted} lowPowerActive={lowPowerActive} reduceMotion={reduceMotion} onToggleAudio={() => setAudioMuted((value) => !value)} onToggleLowPower={() => setManualLowPower((value) => !value)} onToggleReduceMotion={() => setMotionPreference(() => reduceMotion ? 'full' : 'reduced')} onPlay={playCards} onChallenge={challenge} onReturnToRoom={returnToRoom} onLeaveRoom={leaveRoom} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V7.0 · 扩展玩法完整迭代 · 默认关闭保护经典模式</footer>
+    <footer>V7.1 · 多模式扩展首版 · 当前开放加注模式</footer>
   </div></ErrorBoundary>;
 }

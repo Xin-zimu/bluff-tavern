@@ -6,6 +6,12 @@ import { playGamePhaseSound } from '../audio/game-audio-manager';
 import { playUiTone } from '../audio/ui-sounds';
 import { CHARACTER_ART, ITEM_ART, ITEM_NAMES, characterImage } from '../art';
 
+const GAME_MODE_NAMES: Record<GameView['gameMode'], string> = {
+  CLASSIC: '经典',
+  QUICK: '快速',
+  ESCALATION: '加注',
+};
+
 export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, reduceMotion, onToggleAudio, onToggleLowPower, onToggleReduceMotion, onPlay, onChallenge, onReturnToRoom, onLeaveRoom, onFullscreen, onUseItem, onShare }: { room: RoomView; game: GameView; playerId: string | null; audioMuted: boolean; lowPowerActive: boolean; reduceMotion: boolean; onToggleAudio: () => void; onToggleLowPower: () => void; onToggleReduceMotion: () => void; onPlay: (indexes: number[]) => void; onChallenge: () => void; onReturnToRoom: () => void; onLeaveRoom: () => void; onFullscreen: () => void; onUseItem: (itemId: GameView['items'][number]) => void; onShare: () => void }) {
   const [selected, setSelected] = useState<number[]>([]);
   const [localNow, setLocalNow] = useState(() => Date.now());
@@ -15,10 +21,13 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const playedAudioSequence = useRef<number | null>(null);
   const isTurn = game.turnPlayerId === playerId && game.phase === 'TURN';
   const canPlay = isTurn && !game.mustChallenge;
+  const canSubmitPlay = canPlay && selected.length >= game.minimumPlayCount;
   const canChallenge = isTurn && game.lastPlay !== null;
   const isGameOver = game.phase === 'GAME_OVER';
   const eventClass = game.tavernEvent ? ` game-screen--event-${game.tavernEvent.type.toLowerCase().replace('_', '-')}` : '';
-  const modeCopy = `${game.gameMode === 'QUICK' ? '快速' : '经典'} ${game.turnDurationSeconds} 秒`;
+  const modeCopy = `${GAME_MODE_NAMES[game.gameMode]} ${game.turnDurationSeconds} 秒`;
+  const turnInstruction = game.minimumPlayCount > 1 ? `你的回合：至少选择 ${game.minimumPlayCount} 张牌` : '你的回合：选择 1 至 3 张牌';
+  const modeRuleCopy = game.gameMode === 'ESCALATION' && game.phase === 'TURN' ? `加注模式：本次至少出 ${game.minimumPlayCount} 张` : null;
   const players = useMemo(() => {
     const seated = room.players.map((player) => ({ ...player, cards: game.players.find((entry) => entry.playerId === player.id)?.cardCount ?? 0, alive: game.alivePlayerIds.includes(player.id) }));
     const self = seated.find((player) => player.id === playerId);
@@ -30,7 +39,12 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const statusCopy = describeMatchStatus(game, currentPlayer?.nickname, lastPlayer?.nickname);
   const hintCopy = !dismissedTip && !isGameOver ? describeNewPlayerHint(game, isTurn) : null;
   const toggle = (index: number) => setSelected((current) => current.includes(index) ? current.filter((item) => item !== index) : current.length < 3 ? [...current, index] : current);
-  const play = () => { if (!audioMuted) playUiTone(420); onPlay(selected); setSelected([]); };
+  const play = () => {
+    if (!canSubmitPlay) return;
+    if (!audioMuted) playUiTone(420);
+    onPlay(selected);
+    setSelected([]);
+  };
   const leaveWithConfirm = () => {
     if (window.confirm('确定退出当前房间？退出后本局将继续进行，你的位置会从房间中移除。')) onLeaveRoom();
   };
@@ -67,7 +81,8 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
     </div>
     {hintCopy && <aside className="onboarding-tip" aria-live="polite"><p>{hintCopy}</p><button type="button" onClick={dismissTip}>知道了</button></aside>}
     {game.tavernEvent && <TavernEventBanner event={game.tavernEvent} />}
-    {!isGameOver && <div className="turn-banner" aria-live="polite">{isTurn ? (game.mustChallenge ? '你的回合：必须质疑上一手' : '你的回合：选择 1 至 3 张牌') : game.phase === 'TURN' ? `等待 ${currentPlayer?.nickname ?? '玩家'} 出牌` : statusCopy}</div>}
+    {!isGameOver && <div className="turn-banner" aria-live="polite">{isTurn ? (game.mustChallenge ? '你的回合：必须质疑上一手' : turnInstruction) : game.phase === 'TURN' ? `等待 ${currentPlayer?.nickname ?? '玩家'} 出牌` : statusCopy}</div>}
+    {modeRuleCopy && <aside className="mode-rule" aria-live="polite">{modeRuleCopy}</aside>}
     <section className={`panel game-table${game.phase === 'PUNISHMENT_RESULT' && game.punishment?.hit ? ' game-table--elimination' : ''}${isGameOver ? ' game-table--victory' : ''}`}><div className="table-status"><span>{statusCopy}</span></div>
       <div className="table-surface" aria-label="牌桌">
         <RoundTargetHud target={game.targetCard} roundNumber={game.roundNumber} />
@@ -79,7 +94,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
       </li>)}</ul>
     </section>
     {!isGameOver && <section className={`hand${tipsy ? ' hand--tipsy' : ''}`} aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card card--${card.toLowerCase()} ${selected.includes(index) ? 'selected' : ''}`} aria-pressed={selected.includes(index)} onClick={() => toggle(index)} disabled={!canPlay}>{card === 'JOKER' ? <img src="/assets/cards/joker.png" alt="Joker" /> : <span>{card}</span>}</button>)}</section>}
-    {!isGameOver && <button className="button button--primary button--art-start play-button" disabled={!canPlay || selected.length === 0} onClick={play}>出 {selected.length || ''} 张牌</button>}
+    {!isGameOver && <button className="button button--primary button--art-start play-button" disabled={!canSubmitPlay} onClick={play}>出 {selected.length || ''} 张牌</button>}
     {!isGameOver && (game.items.length > 0 || activeItemEffect || activeAbilityEffect) && <div className="item-dock">
       {activeAbilityEffect && <p className={`ability-effect ability-effect--${activeAbilityEffect.riskLevel?.toLowerCase() ?? 'neutral'}`} aria-live="polite"><strong>{activeAbilityEffect.title}</strong>{activeAbilityEffect.message}</p>}
       {activeItemEffect && <p className={`item-effect item-effect--${activeItemEffect.riskLevel?.toLowerCase() ?? 'neutral'}`} aria-live="polite">{activeItemEffect.message}</p>}
@@ -163,6 +178,7 @@ function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPla
   if (game.phase === 'ROUND_START') return `第 ${game.roundNumber} 轮开始，目标牌 ${game.targetCard}`;
   if (game.phase === 'TURN') {
     if (game.mustChallenge) return `${currentPlayerName ?? '玩家'} 必须质疑上一手`;
+    if (game.gameMode === 'ESCALATION' && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 至少出 ${game.minimumPlayCount} 张或质疑`;
     if (game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，等待 ${currentPlayerName ?? '玩家'} 行动`;
     return `等待 ${currentPlayerName ?? '玩家'} 出牌`;
   }
@@ -176,6 +192,7 @@ function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPla
 
 function describeNewPlayerHint(game: GameView, isTurn: boolean): string | null {
   if (game.phase === 'ROUND_START') return `本轮目标是 ${game.targetCard}。你可以出任意牌，但声明都会按 ${game.targetCard} 处理。`;
+  if (isTurn && game.gameMode === 'ESCALATION' && game.lastPlay) return `加注模式：这手至少出 ${game.minimumPlayCount} 张，也可以质疑上一手。`;
   if (isTurn && !game.lastPlay) return '选择 1 至 3 张手牌，然后点击出牌。真实牌面可以和目标牌不同。';
   if (isTurn && game.lastPlay) return '你可以相信上一手继续出牌，也可以质疑。质疑失败会由你受罚。';
   if (game.phase === 'REVEAL') return '质疑后会逐张揭示真实牌面，Joker 视为真实目标牌。';

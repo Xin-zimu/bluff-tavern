@@ -1,8 +1,9 @@
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 export type RoomStatus = 'LOBBY' | 'STARTING' | 'PLAYING' | 'ROUND_RESULT' | 'GAME_OVER' | 'CLOSED';
 export type PlayerStatus = 'CONNECTED' | 'DISCONNECTED' | 'READY' | 'PLAYING' | 'ELIMINATED' | 'SPECTATING';
-export type GameMode = 'CLASSIC' | 'QUICK' | 'PARTY' | 'CUSTOM';
+export type GameMode = 'CLASSIC' | 'QUICK' | 'PARTY' | 'FREE_CHALLENGE' | 'SHARED_REVOLVER' | 'ESCALATION' | 'CUSTOM';
 export type V6GameMode = Extract<GameMode, 'CLASSIC' | 'QUICK'>;
+export type PlayableGameMode = Extract<GameMode, 'CLASSIC' | 'QUICK' | 'ESCALATION'>;
 export type TavernEventType = 'BLACKOUT' | 'DRUNKEN' | 'RAPID_NIGHT' | 'CANDLE_FLICKER' | 'DOUBLE_DANGER';
 export type CharacterId = 'WOLF' | 'FOX' | 'BEAR' | 'RABBIT' | 'CAT' | 'RACCOON' | 'FROG' | 'PANDA';
 export type ItemId = 'SPYGLASS' | 'SWAP_GLOVE' | 'WAX_SEAL' | 'TAVERN_MUG' | 'POCKET_WATCH';
@@ -187,7 +188,7 @@ export interface GameSnapshot {
   phaseStartedAt: number;
   phaseEndsAt: number | null;
 
-  gameMode: V6GameMode;
+  gameMode: PlayableGameMode;
   turnDurationSeconds: number;
   roundNumber: number;
   targetRank: TargetRank | null;
@@ -195,6 +196,7 @@ export interface GameSnapshot {
 
   turnPlayerId: string | null;
   mustChallenge: boolean;
+  minimumPlayCount: number;
 
   players: PublicPlayerState[];
   hand: CardRank[];

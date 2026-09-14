@@ -10,6 +10,7 @@ import {
   type GameMode,
   type GamePhase,
   type GameSnapshot,
+  type PlayableGameMode,
   type PrivateAbilityEffect,
   type PrivateItemEffect,
   type PublicChallengeState,
@@ -18,7 +19,6 @@ import {
   type RevolverState,
   type RoomView,
   type TargetRank,
-  type V6GameMode,
   type V7ExtensionSettings,
 } from '@bluff-tavern/shared';
 import { RoomError } from '../rooms/room-store.js';
@@ -64,7 +64,7 @@ interface InternalGame {
   punishment: PublicPunishmentState | null;
   revolvers: Map<string, RevolverState>;
   winnerId: string | null;
-  gameMode: V6GameMode;
+  gameMode: PlayableGameMode;
   turnDurationSeconds: number;
   roundTurnDurationSeconds: number;
   v7: V7ExtensionSettings;
@@ -138,7 +138,7 @@ export class GameService {
   constructor(private readonly random: RandomService) {}
 
   start(room: RoomView): GameSnapshot {
-    const gameMode = this.requireV6Mode(room.settings.gameMode);
+    const gameMode = this.requirePlayableMode(room.settings.gameMode);
     const playerOrder = room.players.map((player) => player.id);
     const turnDurationSeconds = gameMode === 'QUICK' ? 7 : 15;
     const v7 = { ...room.settings.v7 };
@@ -201,19 +201,22 @@ export class GameService {
   playCards(roomCode: string, playerId: string, cardIndexes: number[]): PlayCardsResult {
     const game = this.requireGame(roomCode);
     this.requireTurn(game, playerId);
-    if (game.mustChallenge) throw new RoomError('MUST_CHALLENGE', '上一手已经出光手牌，必须质疑');
+    if (game.mustChallenge) throw new RoomError('MUST_CHALLENGE', '当前必须质疑上一手');
     if (cardIndexes.length < 1 || cardIndexes.length > MAX_CARDS_PER_PLAY) throw new RoomError('INVALID_CARD_SELECTION', '请选择 1 到 3 张牌');
     if (new Set(cardIndexes).size !== cardIndexes.length) throw new RoomError('INVALID_CARD_SELECTION', '不能重复选择同一张牌');
     const hand = game.hands.get(playerId);
     if (!hand) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
     if (cardIndexes.some((index) => index < 0 || index >= hand.length)) throw new RoomError('INVALID_CARD_SELECTION', '选择了不存在的手牌');
+    const minimumPlayCount = this.minimumPlayCount(game);
+    if (cardIndexes.length < minimumPlayCount) throw new RoomError('INVALID_CARD_SELECTION', `本模式至少选择 ${minimumPlayCount} 张牌`);
 
     const cards = cardIndexes.map((index) => hand[index]!);
     [...cardIndexes].sort((a, b) => b - a).forEach((index) => hand.splice(index, 1));
     game.lastPlay = { playerId, cards, count: cards.length };
     game.discardCount += cards.length;
-    game.mustChallenge = hand.length === 0;
-    game.turnPlayerId = this.nextAlivePlayerId(game, playerId);
+    const nextPlayerId = this.nextAlivePlayerId(game, playerId);
+    game.turnPlayerId = nextPlayerId;
+    game.mustChallenge = hand.length === 0 || this.shouldForceChallengeNextTurn(game, nextPlayerId);
     this.enterPhase(game, 'TURN', this.turnDurationMs(game));
 
     const state = this.getView(roomCode, playerId);
@@ -274,7 +277,9 @@ export class GameService {
     if (game.mustChallenge) return this.challenge(roomCode, game.turnPlayerId);
     const hand = game.hands.get(game.turnPlayerId) ?? [];
     if (hand.length === 0) return this.challenge(roomCode, game.turnPlayerId);
-    return this.playCards(roomCode, game.turnPlayerId, [this.random.nextInt(hand.length)]);
+    const minimumPlayCount = this.minimumPlayCount(game);
+    if (hand.length < minimumPlayCount) return this.challenge(roomCode, game.turnPlayerId);
+    return this.playCards(roomCode, game.turnPlayerId, this.pickAutoCardIndexes(hand.length, minimumPlayCount));
   }
 
   useItem(roomCode: string, playerId: string, itemId: ActiveItemId): GameSnapshot {
@@ -391,6 +396,7 @@ export class GameService {
       targetCard: game.targetRank,
       turnPlayerId: game.turnPlayerId,
       mustChallenge: game.mustChallenge,
+      minimumPlayCount: this.minimumPlayCount(game),
       players: game.playerOrder.map((playerId, seatIndex) => {
         const handCount = game.hands.get(playerId)?.length ?? 0;
         return {
@@ -909,6 +915,27 @@ export class GameService {
     return game.roundTurnDurationSeconds * 1_000;
   }
 
+  private minimumPlayCount(game: InternalGame): number {
+    if (game.gameMode !== 'ESCALATION' || !game.lastPlay) return 1;
+    return game.lastPlay.count;
+  }
+
+  private shouldForceChallengeNextTurn(game: InternalGame, playerId: string | null): boolean {
+    if (game.gameMode !== 'ESCALATION' || !game.lastPlay || !playerId) return false;
+    const hand = game.hands.get(playerId) ?? [];
+    return hand.length < game.lastPlay.count;
+  }
+
+  private pickAutoCardIndexes(handLength: number, count: number): number[] {
+    const available = Array.from({ length: handLength }, (_, index) => index);
+    const picked: number[] = [];
+    while (picked.length < count && available.length > 0) {
+      const index = this.random.nextInt(available.length);
+      picked.push(available.splice(index, 1)[0]!);
+    }
+    return picked.sort((a, b) => a - b);
+  }
+
   private rapidNightTurnDurationSeconds(baseTurnDurationSeconds: number): number {
     return Math.max(5, baseTurnDurationSeconds - 5);
   }
@@ -940,8 +967,8 @@ export class GameService {
     };
   }
 
-  private requireV6Mode(gameMode: GameMode): V6GameMode {
-    if (gameMode !== 'CLASSIC' && gameMode !== 'QUICK') throw new RoomError('FEATURE_DISABLED', 'V6.0 只开放 Classic 和 Quick');
+  private requirePlayableMode(gameMode: GameMode): PlayableGameMode {
+    if (gameMode !== 'CLASSIC' && gameMode !== 'QUICK' && gameMode !== 'ESCALATION') throw new RoomError('FEATURE_DISABLED', '当前只开放 Classic、Quick 和加注模式');
     return gameMode;
   }
 

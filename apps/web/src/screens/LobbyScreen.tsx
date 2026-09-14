@@ -1,5 +1,14 @@
-import type { RoomView, V6GameMode, V7ExtensionSettings } from '@bluff-tavern/shared';
+import type { GameMode, PlayableGameMode, RoomView, V7ExtensionSettings } from '@bluff-tavern/shared';
 import { CHARACTER_ABILITIES, CHARACTER_ART, CHARACTER_IDS } from '../art';
+
+const MODE_OPTIONS: Array<{ id: GameMode; title: string; badge: string; description: string; enabled: boolean }> = [
+  { id: 'CLASSIC', title: '经典模式', badge: '15 秒', description: '标准诈唬、质疑、左轮惩罚。', enabled: true },
+  { id: 'QUICK', title: '快速模式', badge: '7 秒', description: '更短回合倒计时，保持原规则。', enabled: true },
+  { id: 'ESCALATION', title: '加注模式', badge: '新开放', description: '每手出牌数不得低于上一手。', enabled: true },
+  { id: 'SHARED_REVOLVER', title: '死亡左轮', badge: '计划中', description: '全桌共用一把左轮。', enabled: false },
+  { id: 'FREE_CHALLENGE', title: '全民质疑', badge: '计划中', description: '多人抢先质疑窗口。', enabled: false },
+  { id: 'PARTY', title: '酒馆乱斗', badge: '计划中', description: '每轮一个随机酒馆事件。', enabled: false },
+];
 
 const V7_FEATURE_SWITCHES: Array<{ key: keyof V7ExtensionSettings; label: string }> = [
   { key: 'itemsEnabled', label: '启用道具' },
@@ -7,8 +16,13 @@ const V7_FEATURE_SWITCHES: Array<{ key: keyof V7ExtensionSettings; label: string
   { key: 'characterAbilitiesEnabled', label: '启用角色能力' },
 ];
 
-function toV6Mode(gameMode: RoomView['settings']['gameMode']): V6GameMode {
+function toPlayableMode(gameMode: RoomView['settings']['gameMode']): PlayableGameMode {
+  if (gameMode === 'ESCALATION') return 'ESCALATION';
   return gameMode === 'QUICK' ? 'QUICK' : 'CLASSIC';
+}
+
+function isPlayableMode(gameMode: GameMode): gameMode is PlayableGameMode {
+  return gameMode === 'CLASSIC' || gameMode === 'QUICK' || gameMode === 'ESCALATION';
 }
 
 interface LobbyProps {
@@ -16,7 +30,7 @@ interface LobbyProps {
   playerId: string | null;
   onLeave: () => void;
   onReady: (ready: boolean) => void;
-  onSettingsChange: (settings: RoomView['settings'] & { gameMode: V6GameMode }) => void;
+  onSettingsChange: (settings: RoomView['settings'] & { gameMode: PlayableGameMode }) => void;
   onKick: (playerId: string) => void;
   onStart: () => void;
   onSelectCharacter: (characterId: NonNullable<RoomView['players'][number]['characterId']>) => void;
@@ -27,9 +41,17 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
   const isHost = room.hostPlayerId === playerId;
   const self = room.players.find((player) => player.id === playerId);
   const extensionSettings = room.settings.v7;
+  const selectedMode = toPlayableMode(room.settings.gameMode);
+  const updateMode = (gameMode: PlayableGameMode) => onSettingsChange({
+    ...room.settings,
+    gameMode,
+    turnDurationSeconds: gameMode === 'QUICK' ? 7 : 15,
+    eventEnabled: false,
+    bulletCount: null,
+  });
   const updateExtension = (key: keyof V7ExtensionSettings, enabled: boolean) => onSettingsChange({
     ...room.settings,
-    gameMode: toV6Mode(room.settings.gameMode),
+    gameMode: selectedMode,
     eventEnabled: false,
     bulletCount: null,
     v7: { ...extensionSettings, [key]: enabled },
@@ -46,15 +68,27 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
     <section className="panel player-panel">
       <div className="panel-title"><h2>已入席玩家</h2><span>{room.players.length} / {room.maxPlayers}</span></div>
       {isHost && <label className="settings-control" htmlFor="max-players">最大人数
-        <select id="max-players" value={room.settings.maxPlayers} onChange={(event) => onSettingsChange({ ...room.settings, gameMode: room.settings.gameMode === 'QUICK' ? 'QUICK' : 'CLASSIC', maxPlayers: Number(event.target.value) })}>
+        <select id="max-players" value={room.settings.maxPlayers} onChange={(event) => onSettingsChange({ ...room.settings, gameMode: selectedMode, maxPlayers: Number(event.target.value) })}>
           {[2, 3, 4, 5, 6, 7, 8].map((count) => <option key={count} value={count} disabled={count < room.players.length}>{count} 人</option>)}
         </select>
       </label>}
-      {isHost && <label className="settings-control" htmlFor="game-mode">节奏
-        <select id="game-mode" value={room.settings.gameMode} onChange={(event) => onSettingsChange({ ...room.settings, gameMode: event.target.value as V6GameMode, eventEnabled: false, bulletCount: null })}>
-          <option value="CLASSIC">经典（15 秒）</option><option value="QUICK">快速（7 秒）</option>
-        </select>
-      </label>}
+      <section className={`mode-selector${isHost ? '' : ' mode-selector--readonly'}`} aria-label="游戏模式">
+        {MODE_OPTIONS.map((mode) => {
+          const selected = selectedMode === mode.id;
+          const disabled = !isHost || !mode.enabled;
+          return <button
+            key={mode.id}
+            type="button"
+            className={selected ? 'selected' : ''}
+            disabled={disabled}
+            aria-pressed={selected}
+            onClick={() => { if (isPlayableMode(mode.id)) updateMode(mode.id); }}
+          >
+            <span className="mode-card__top"><strong>{mode.title}</strong><small>{mode.badge}</small></span>
+            <span>{mode.description}</span>
+          </button>;
+        })}
+      </section>
       <div className={`feature-switches${isHost ? '' : ' feature-switches--readonly'}`} aria-label="V7 扩展玩法开关">
         {V7_FEATURE_SWITCHES.map((feature) => <label className="feature-switch" key={feature.key}>
           {isHost ? <>

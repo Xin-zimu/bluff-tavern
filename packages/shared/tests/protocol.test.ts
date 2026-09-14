@@ -13,15 +13,18 @@ describe('joinRoomSchema', () => {
   });
 });
 
-describe('V6 protocol schemas', () => {
-  it('allows only Classic and Quick game modes', () => {
+describe('V7.1 protocol schemas', () => {
+  it('allows only implemented game modes', () => {
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'CLASSIC', requestId: crypto.randomUUID() }).success).toBe(true);
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'QUICK', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'ESCALATION', requestId: crypto.randomUUID() }).success).toBe(true);
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'PARTY', requestId: crypto.randomUUID() }).success).toBe(false);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'FREE_CHALLENGE', requestId: crypto.randomUUID() }).success).toBe(false);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'SHARED_REVOLVER', requestId: crypto.randomUUID() }).success).toBe(false);
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'CUSTOM', requestId: crypto.randomUUID() }).success).toBe(false);
   });
 
-  it('accepts V7 extension flags without enabling new game modes', () => {
+  it('accepts V7 extension flags alongside implemented game modes', () => {
     expect(updateRoomSettingsSchema.safeParse({
       roomCode: 'ABC234',
       maxPlayers: 4,

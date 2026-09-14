@@ -2,6 +2,20 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [7.1.0] - 2026-09-14
+
+### Added
+
+- 新增 V7.1 多模式基础：共享类型保留完整计划模式，但协议只开放已实现的 Classic、Quick 和 Escalation。
+- 新增 Escalation / 加注模式：上一手出几张，下一手至少出几张；手牌不足时服务器强制进入质疑。
+- 大厅节奏下拉改为模式卡片，未开放的 Party、Free Challenge、Shared Revolver 和 Custom 保持计划中状态。
+- 游戏内显示加注最低出牌数，并用服务端 `minimumPlayCount` 保护出牌按钮和状态提示。
+
+### Changed
+
+- 当前版本、页面标题、页脚、健康检查版本和 Service Worker cache key 更新为 V7.1。
+- V7.0 多模式计划文档调整为 V7.1 基线，明确当前角色能力保留但不继续作为本阶段主线扩展。
+
 ## [7.0.0] - 2026-09-14
 
 ### Added
