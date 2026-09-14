@@ -18,9 +18,9 @@ describe('V7.1 protocol schemas', () => {
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'CLASSIC', requestId: crypto.randomUUID() }).success).toBe(true);
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'QUICK', requestId: crypto.randomUUID() }).success).toBe(true);
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'ESCALATION', requestId: crypto.randomUUID() }).success).toBe(true);
-    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'PARTY', requestId: crypto.randomUUID() }).success).toBe(false);
-    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'FREE_CHALLENGE', requestId: crypto.randomUUID() }).success).toBe(false);
-    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'SHARED_REVOLVER', requestId: crypto.randomUUID() }).success).toBe(false);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'PARTY', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'FREE_CHALLENGE', requestId: crypto.randomUUID() }).success).toBe(true);
+    expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'SHARED_REVOLVER', requestId: crypto.randomUUID() }).success).toBe(true);
     expect(updateRoomSettingsSchema.safeParse({ roomCode: 'ABC234', maxPlayers: 4, gameMode: 'CUSTOM', requestId: crypto.randomUUID() }).success).toBe(false);
   });
 

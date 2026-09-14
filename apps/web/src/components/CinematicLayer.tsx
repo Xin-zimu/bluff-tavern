@@ -13,6 +13,7 @@ const phaseLabels: Record<GamePhase, string> = {
   MATCH_START: '牌局开始',
   ROUND_START: '新一轮',
   TURN: '行动中',
+  CHALLENGE_WINDOW: '质疑窗口',
   CHALLENGE_CALLOUT: '质疑',
   REVEAL: '翻牌',
   VERDICT: '判定',
@@ -30,7 +31,7 @@ const REVEAL_TIMING = {
 } as const;
 
 export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
-  if (game.phase === 'TURN') return null;
+  if (game.phase === 'TURN' || game.phase === 'CHALLENGE_WINDOW') return null;
   const elapsed = Math.max(0, now - game.phaseStartedAt);
   if (game.phase === 'GAME_OVER' && elapsed > 3_000) return null;
   const duration = game.phaseEndsAt ? Math.max(1, game.phaseEndsAt - game.phaseStartedAt) : 1;
@@ -49,7 +50,7 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
       <p className="cinematic__phase">{phaseLabels[game.phase]}</p>
       {game.phase === 'ROUND_START' && <RoundIntro game={game} progress={progress} />}
       {game.phase === 'CHALLENGE_CALLOUT' && <Callout challenger={challenger} challenged={challenged} />}
-      {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} targetRank={game.targetRank} elapsed={elapsed} />}
+      {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} game={game} elapsed={elapsed} />}
       {game.phase === 'VERDICT' && <Verdict game={game} punished={punished} />}
       {game.phase === 'PUNISHMENT_INTRO' && <RevolverBeat title={punished} subtitle="弹巢旋转" chamber={null} />}
       {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle={punishmentSubtitle} chamber={null} tense />}
@@ -84,12 +85,12 @@ function Callout({ challenger, challenged }: { challenger: string; challenged: s
   </div>;
 }
 
-function Reveal({ cards, targetRank, elapsed }: { cards: CardRank[]; targetRank: GameView['targetRank']; elapsed: number }) {
+function Reveal({ cards, game, elapsed }: { cards: CardRank[]; game: GameView; elapsed: number }) {
   const settledAt = REVEAL_TIMING.intro + cards.length * REVEAL_TIMING.perCard;
   return <div className={`reveal-cards ${elapsed >= settledAt ? 'is-settled' : ''}`}>
     {cards.map((card, index) => {
       const visible = elapsed >= REVEAL_TIMING.intro + index * REVEAL_TIMING.perCard;
-      const honest = card === targetRank || card === 'JOKER';
+      const honest = card === game.targetRank || (card === 'JOKER' && game.tavernEvent?.type !== 'NO_JOKER');
       return <div key={`${card}-${index}`} className={`reveal-card reveal-card--${card.toLowerCase()} ${visible ? 'is-flipped' : ''} ${honest ? 'is-honest' : 'is-bluff'}`} style={{ '--card-index': index } as CSSProperties}>
         <span className="reveal-card__back">?</span>
         <span className="reveal-card__front">{card}</span>
@@ -123,7 +124,7 @@ function RevolverBeat({ title, subtitle, chamber, tense = false, result }: { tit
 
 function PunishmentResult({ result, punished }: { result: GameView['punishment']; punished: string }) {
   return <div className={`punishment-result ${result?.hit ? 'is-hit' : 'is-dry'}`}>
-    <RevolverBeat title={result?.hit ? '这一发有子弹' : '这一发没有子弹'} subtitle={result?.hit ? `${punished} 已淘汰` : `${punished} 暂时安全`} chamber={result?.chamber ?? null} result={result} />
+    <RevolverBeat title={result?.hit ? '这一发有子弹' : '这一发没有子弹'} subtitle={result?.totalShots && result.totalShots > 1 ? `第 ${result.shotNumber}/${result.totalShots} 枪 · ${result.hit ? `${punished} 已淘汰` : `${punished} 暂时安全`}` : result?.hit ? `${punished} 已淘汰` : `${punished} 暂时安全`} chamber={result?.chamber ?? null} result={result} />
   </div>;
 }
 

@@ -30,10 +30,10 @@ function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings 
 
 const deterministic = () => new GameService({ nextInt: () => 0 });
 
-const eventRandom = (eventIndex: 0 | 1 | 2) => new GameService({
+const eventRandom = (eventIndex: 2 | 3 | 4) => new GameService({
   nextInt: (maxExclusive) => {
     if (maxExclusive === 100) return 0;
-    if (maxExclusive === 3) return eventIndex;
+    if (maxExclusive === 7) return eventIndex;
     return 0;
   },
 });
@@ -67,7 +67,7 @@ describe('V6 GameService rules', () => {
     expect(state.phase).toBe('ROUND_START');
     expect(state.players).toHaveLength(playerCount);
     expect(state.players.every((player) => player.handCount === 5)).toBe(true);
-    expect(state.players.reduce((sum, player) => sum + player.handCount, 0)).toBe(playerCount * 5);
+    expect(state.players.reduce((sum, player) => sum + (player.handCount ?? 0), 0)).toBe(playerCount * 5);
   });
 
   it('accepts 1 to 3 cards and rejects too many cards or bad indexes', () => {
@@ -191,6 +191,157 @@ describe('V6 GameService rules', () => {
 
     expect(result.state).toMatchObject({ lastPlay: { playerId: 'p2', count: 2 }, minimumPlayCount: 2, turnPlayerId: 'p1' });
     expect(result.cues).toMatchObject([{ type: 'CARD_PLAYED', playerId: 'p2', count: 2 }]);
+  });
+
+  it('uses one shared revolver across punished players and hides the bullet position', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'SHARED_REVOLVER');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetSharedRevolver(room.code, { chamberCount: 6, bulletPosition: 2, currentChamber: 0, shotsTaken: 0 });
+
+    service.debugSetHand(room.code, 'p1', ['K']);
+    service.playCards(room.code, 'p1', [0]);
+    service.challenge(room.code, 'p2');
+    const first = advanceTo(service, room.code, 'PUNISHMENT_RESULT');
+    expect(first.punishment).toMatchObject({ punishedPlayerId: 'p1', chamber: 0, hit: false });
+    expect(first.sharedRevolver).toEqual({ chamberCount: 6, currentChamber: 1, shotsTaken: 1 });
+    expect(first.sharedRevolver).not.toHaveProperty('bulletPosition');
+
+    service.advancePhase(room.code);
+    advanceTo(service, room.code, 'TURN');
+    service.debugSetHand(room.code, 'p1', ['K']);
+    service.playCards(room.code, 'p1', [0]);
+    service.challenge(room.code, 'p2');
+    const second = advanceTo(service, room.code, 'PUNISHMENT_RESULT');
+    expect(second.punishment).toMatchObject({ punishedPlayerId: 'p1', chamber: 1, hit: false });
+    expect(second.sharedRevolver).toEqual({ chamberCount: 6, currentChamber: 2, shotsTaken: 2 });
+  });
+
+  it('resets the shared revolver after a hit', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'SHARED_REVOLVER');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetSharedRevolver(room.code, { chamberCount: 6, bulletPosition: 0, currentChamber: 0, shotsTaken: 0 });
+    service.debugSetHand(room.code, 'p1', ['K']);
+
+    service.playCards(room.code, 'p1', [0]);
+    service.challenge(room.code, 'p2');
+    const hit = advanceTo(service, room.code, 'PUNISHMENT_RESULT');
+
+    expect(hit.punishment).toMatchObject({ punishedPlayerId: 'p1', chamber: 0, hit: true, eliminatedPlayerId: 'p1' });
+    expect(hit.sharedRevolver).toEqual({ chamberCount: 6, currentChamber: 0, shotsTaken: 0 });
+  });
+
+  it('opens a server-owned Free Challenge window after a play', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'FREE_CHALLENGE');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A']);
+
+    const windowState = service.playCards(room.code, 'p1', [0]).state;
+
+    expect(windowState).toMatchObject({ phase: 'CHALLENGE_WINDOW', turnPlayerId: null, freeChallenge: { challengedId: 'p1', challengerId: null } });
+    expect((windowState.phaseEndsAt ?? 0) - windowState.phaseStartedAt).toBe(3_000);
+    expect(() => service.challenge(room.code, 'p1')).toThrow('不能质疑自己的出牌');
+    const challenged = service.challenge(room.code, 'p3').state;
+    expect(challenged).toMatchObject({ phase: 'CHALLENGE_CALLOUT', challenge: { challengerId: 'p3', challengedId: 'p1' } });
+    expect(() => service.challenge(room.code, 'p2')).toThrow('已经有玩家抢先质疑');
+  });
+
+  it('advances Free Challenge to the next turn when nobody challenges', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'FREE_CHALLENGE');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A', 'K']);
+    service.playCards(room.code, 'p1', [0]);
+
+    const advanced = service.advancePhase(room.code).state;
+
+    expect(advanced).toMatchObject({ phase: 'TURN', turnPlayerId: 'p2', freeChallenge: null });
+  });
+
+  it('forces a Free Challenge timeout challenge when the previous player has no cards', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'FREE_CHALLENGE');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A']);
+    service.playCards(room.code, 'p1', [0]);
+
+    const result = service.advancePhase(room.code);
+
+    expect(result.state).toMatchObject({ phase: 'CHALLENGE_CALLOUT', challenge: { challengerId: 'p2', challengedId: 'p1' } });
+    expect(result.cues).toMatchObject([{ type: 'CHALLENGE_CALLED', playerId: 'p2' }]);
+  });
+
+  it('hides other players hand counts during Party BLACKOUT only in public views', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'BLACKOUT');
+
+    const p1View = service.getView(room.code, 'p1');
+    const p2View = service.getView(room.code, 'p2');
+
+    expect(p1View.players.map((player) => [player.playerId, player.handCount])).toEqual([['p1', 5], ['p2', null], ['p3', null]]);
+    expect(p2View.players.map((player) => [player.playerId, player.handCount])).toEqual([['p1', null], ['p2', 5], ['p3', null]]);
+  });
+
+  it('reverses turn order during Party DRUNKEN', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'DRUNKEN');
+    service.debugSetHand(room.code, 'p1', ['A', 'K']);
+
+    const played = service.playCards(room.code, 'p1', [0]).state;
+
+    expect(played).toMatchObject({ turnDirection: 'COUNTERCLOCKWISE', turnPlayerId: 'p3' });
+  });
+
+  it('treats Joker as bluff during Party NO_JOKER', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'NO_JOKER');
+    service.debugSetHand(room.code, 'p1', ['JOKER']);
+
+    service.playCards(room.code, 'p1', [0]);
+    service.challenge(room.code, 'p2');
+    const verdict = advanceTo(service, room.code, 'VERDICT');
+
+    expect(verdict.challenge).toMatchObject({ wasBluff: true, punishedPlayerId: 'p1' });
+  });
+
+  it('enforces Party FORCED_BET after the opening play', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'FORCED_BET');
+    service.debugSetHand(room.code, 'p1', ['A', 'K']);
+    service.debugSetHand(room.code, 'p2', ['A', 'K', 'Q']);
+
+    const opening = service.playCards(room.code, 'p1', [0]).state;
+    expect(opening).toMatchObject({ minimumPlayCount: 2, turnPlayerId: 'p2' });
+    expect(() => service.playCards(room.code, 'p2', [0])).toThrow('至少选择 2 张牌');
+    expect(service.playCards(room.code, 'p2', [0, 1]).state.lastPlay).toMatchObject({ playerId: 'p2', count: 2 });
+  });
+
+  it('runs two punishment shots during Party DOUBLE_DANGER when the first is dry', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'DOUBLE_DANGER');
+    service.debugSetRevolver(room.code, 'p1', { chamberCount: 6, bulletPosition: 1, currentChamber: 0, shotsTaken: 0 });
+    service.debugSetHand(room.code, 'p1', ['K']);
+
+    service.playCards(room.code, 'p1', [0]);
+    service.challenge(room.code, 'p2');
+    const firstShot = advanceTo(service, room.code, 'PUNISHMENT_RESULT');
+    expect(firstShot.punishment).toMatchObject({ shotNumber: 1, totalShots: 2, chamber: 0, hit: false });
+    const secondTrigger = service.advancePhase(room.code).state;
+    expect(secondTrigger.phase).toBe('PUNISHMENT_TRIGGER');
+    const secondShot = service.advancePhase(room.code).state;
+    expect(secondShot.punishment).toMatchObject({ shotNumber: 2, totalShots: 2, chamber: 1, hit: true, eliminatedPlayerId: 'p1' });
   });
 
   it('locks gameplay actions during cinematic phases', () => {
@@ -427,9 +578,9 @@ describe('V6 GameService rules', () => {
   });
 
   it.each([
-    ['RAPID_NIGHT', 0, 10],
-    ['CANDLE_FLICKER', 1, 15],
-    ['DOUBLE_DANGER', 2, 15],
+    ['RAPID_NIGHT', 2, 10],
+    ['CANDLE_FLICKER', 3, 15],
+    ['DOUBLE_DANGER', 4, 15],
   ] as const)('draws the enabled tavern event %s into the public round snapshot', (eventType, eventIndex, expectedTurnSeconds) => {
     const room = makeRoom(2, 'ABC234', makeV7({ tavernEventsEnabled: true }));
     const service = eventRandom(eventIndex);

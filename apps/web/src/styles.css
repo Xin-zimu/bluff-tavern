@@ -169,6 +169,25 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .onboarding-tip { width: min(100%, 720px); display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px auto -6px; padding: 10px 12px 10px 16px; text-align: left; color: #f4dfba; border: 1px solid rgba(212,168,93,.42); border-radius: 6px; background: rgba(18,13,11,.86); box-shadow: 0 12px 28px rgba(0,0,0,.28); }
 .onboarding-tip p { margin: 0; line-height: 1.45; }
 .onboarding-tip button { flex: 0 0 auto; min-height: 34px; padding: 0 10px; color: #17110f; border: 0; border-radius: 4px; background: #f2c777; font-weight: 850; cursor: pointer; }
+.shared-revolver-hud { position: absolute; right: 16px; top: 14px; width: 154px; min-height: 150px; display: grid; align-content: start; justify-items: center; gap: 8px; padding: 12px 10px; z-index: 1; border: 1px solid rgba(255,117,109,.48); border-radius: 8px; background: linear-gradient(160deg, rgba(48,18,18,.96), rgba(11,7,6,.93)); box-shadow: 0 16px 28px rgba(0,0,0,.36), inset 0 0 22px rgba(255,117,109,.05); }
+.shared-revolver-hud strong { color: #ffd8d1; font-family: Georgia, "Songti SC", serif; }
+.shared-revolver-hud__track { display: flex; gap: 5px; }
+.shared-revolver-hud__track span { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(242,199,119,.58); background: rgba(18,13,11,.9); }
+.shared-revolver-hud__track span.is-spent { background: #d4a85d; box-shadow: 0 0 10px rgba(242,199,119,.36); }
+.shared-revolver-hud p, .shared-revolver-hud small { margin: 0; color: #c8b9a1; font-size: .72rem; line-height: 1.35; }
+.shared-revolver-hud small { color: #f2c777; }
+.challenge-window-panel { width: min(100%, 520px); display: grid; justify-items: center; gap: 8px; margin: -6px auto 10px; padding: 16px; border: 1px solid rgba(242,199,119,.58); border-radius: 8px; background: linear-gradient(145deg, rgba(91,31,40,.76), rgba(18,13,11,.94)); box-shadow: 0 18px 36px rgba(0,0,0,.32), inset 0 0 22px rgba(242,199,119,.07); }
+.challenge-window-panel strong { color: #ffe1a1; font-family: Georgia, "Songti SC", serif; font-size: 1.2rem; }
+.challenge-window-panel span { min-width: 74px; min-height: 42px; display: grid; place-items: center; color: #17110f; border-radius: 4px; background: #f2c777; font-weight: 950; font-size: 1.15rem; }
+.challenge-window-panel p { margin: 0; color: #e8ddc8; }
+.challenge-window-panel button { min-height: 44px; padding: 0 22px; color: #e8ddc8; border: 1px solid #f2c777; border-radius: 4px; background: #7a2632; font-weight: 900; cursor: pointer; }
+.challenge-window-panel button:disabled { color: #8f8174; border-color: #5d4640; background: #1b1210; cursor: not-allowed; }
+.hand--no-joker .card--joker { filter: grayscale(.75) brightness(.72); }
+.hand--no-joker .card--joker::after { content: '禁'; position: absolute; inset: auto 6px 6px auto; width: 24px; height: 24px; display: grid; place-items: center; color: #ffe1a1; border-radius: 50%; background: #7a2632; font-size: .72rem; font-family: "PingFang SC", sans-serif; box-shadow: 0 0 0 1px #f2c777; }
+.game-screen--event-rapid-night .phase-clock { background: #ff756d; color: #fff7ec; }
+.game-screen--event-blackout .game-players li:not(.self-seat) .seat-copy small { color: #8b8178; }
+.game-screen--event-drunken .turn-banner { border-color: rgba(129,176,181,.62); background: linear-gradient(90deg, rgba(27,63,67,.22), rgba(166,124,61,.18), rgba(91,31,40,.18)); }
+.game-screen--event-no-joker .mode-rule, .game-screen--event-forced-bet .mode-rule { border-color: rgba(255,117,109,.66); }
 .network-overlay,
 .reconnect-overlay { position: fixed; z-index: 5; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(92vw, 520px); padding: 10px 14px; text-align: center; color: #ffe7bd; border: 1px solid rgba(212,168,93,.55); border-radius: 6px; background: rgba(16,10,8,.92); box-shadow: 0 14px 34px rgba(0,0,0,.42); }
 .reconnect-overlay { bottom: max(62px, calc(env(safe-area-inset-bottom) + 62px)); }
@@ -394,6 +413,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
   .item-button { width: 72px; min-height: 80px; }
   .item-button img { width: 48px; height: 48px; }
   .tavern-event { display: grid; gap: 3px; padding-inline: 10px; }
+  .shared-revolver-hud { position: relative; right: auto; top: auto; width: min(100%, 260px); margin: 0 auto 12px; }
   .item-effect { font-size: .82rem; }
   .ability-effect { grid-template-columns: 1fr; justify-items: center; text-align: center; font-size: .82rem; }
   .challenge-result { padding-inline: 18px; }

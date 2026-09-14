@@ -9,6 +9,9 @@ import { CHARACTER_ART, ITEM_ART, ITEM_NAMES, characterImage } from '../art';
 const GAME_MODE_NAMES: Record<GameView['gameMode'], string> = {
   CLASSIC: '经典',
   QUICK: '快速',
+  PARTY: '乱斗',
+  FREE_CHALLENGE: '全民质疑',
+  SHARED_REVOLVER: '死亡左轮',
   ESCALATION: '加注',
 };
 
@@ -22,14 +25,17 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const isTurn = game.turnPlayerId === playerId && game.phase === 'TURN';
   const canPlay = isTurn && !game.mustChallenge;
   const canSubmitPlay = canPlay && selected.length >= game.minimumPlayCount;
-  const canChallenge = isTurn && game.lastPlay !== null;
+  const canFreeChallenge = game.phase === 'CHALLENGE_WINDOW' && game.lastPlay !== null && playerId !== null && game.alivePlayerIds.includes(playerId) && game.lastPlay.playerId !== playerId;
+  const canChallenge = (isTurn && game.lastPlay !== null) || canFreeChallenge;
   const isGameOver = game.phase === 'GAME_OVER';
   const eventClass = game.tavernEvent ? ` game-screen--event-${game.tavernEvent.type.toLowerCase().replace('_', '-')}` : '';
   const modeCopy = `${GAME_MODE_NAMES[game.gameMode]} ${game.turnDurationSeconds} 秒`;
   const turnInstruction = game.minimumPlayCount > 1 ? `你的回合：至少选择 ${game.minimumPlayCount} 张牌` : '你的回合：选择 1 至 3 张牌';
-  const modeRuleCopy = game.gameMode === 'ESCALATION' && game.phase === 'TURN' ? `加注模式：本次至少出 ${game.minimumPlayCount} 张` : null;
   const players = useMemo(() => {
-    const seated = room.players.map((player) => ({ ...player, cards: game.players.find((entry) => entry.playerId === player.id)?.cardCount ?? 0, alive: game.alivePlayerIds.includes(player.id) }));
+    const seated = room.players.map((player) => {
+      const publicState = game.players.find((entry) => entry.playerId === player.id);
+      return { ...player, cards: publicState ? publicState.cardCount : 0, alive: game.alivePlayerIds.includes(player.id) };
+    });
     const self = seated.find((player) => player.id === playerId);
     return self ? [...seated.filter((player) => player.id !== playerId), self] : seated;
   }, [room.players, game.players, game.alivePlayerIds, playerId]);
@@ -68,6 +74,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   }, [game, audioMuted]);
   const syncedNow = clockRef.current.serverNow + (localNow - clockRef.current.localReceivedAt);
   const secondsLeft = game.phaseEndsAt ? Math.max(0, Math.ceil((game.phaseEndsAt - syncedNow) / 1_000)) : null;
+  const modeRuleCopy = describeModeRule(game, secondsLeft);
   const activeItemEffect = game.itemEffect && (game.itemEffect.expiresAt === null || game.itemEffect.expiresAt > syncedNow) ? game.itemEffect : null;
   const activeAbilityEffect = game.abilityEffect && (game.abilityEffect.expiresAt === null || game.abilityEffect.expiresAt > syncedNow) ? game.abilityEffect : null;
   const tipsy = activeItemEffect?.type === 'TAVERN_MUG_TIPSY';
@@ -81,19 +88,21 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
     </div>
     {hintCopy && <aside className="onboarding-tip" aria-live="polite"><p>{hintCopy}</p><button type="button" onClick={dismissTip}>知道了</button></aside>}
     {game.tavernEvent && <TavernEventBanner event={game.tavernEvent} />}
-    {!isGameOver && <div className="turn-banner" aria-live="polite">{isTurn ? (game.mustChallenge ? '你的回合：必须质疑上一手' : turnInstruction) : game.phase === 'TURN' ? `等待 ${currentPlayer?.nickname ?? '玩家'} 出牌` : statusCopy}</div>}
+    {!isGameOver && <div className="turn-banner" aria-live="polite">{isTurn ? (game.mustChallenge ? '你的回合：必须质疑上一手' : turnInstruction) : game.phase === 'CHALLENGE_WINDOW' ? '全民质疑窗口开启' : game.phase === 'TURN' ? `等待 ${currentPlayer?.nickname ?? '玩家'} 出牌` : statusCopy}</div>}
     {modeRuleCopy && <aside className="mode-rule" aria-live="polite">{modeRuleCopy}</aside>}
     <section className={`panel game-table${game.phase === 'PUNISHMENT_RESULT' && game.punishment?.hit ? ' game-table--elimination' : ''}${isGameOver ? ' game-table--victory' : ''}`}><div className="table-status"><span>{statusCopy}</span></div>
       <div className="table-surface" aria-label="牌桌">
         <RoundTargetHud target={game.targetCard} roundNumber={game.roundNumber} />
+        {game.sharedRevolver && <SharedRevolverHud state={game.sharedRevolver} reloaded={game.punishment?.hit === true} />}
         <TablePile game={game} lastPlayerName={lastPlayer?.nickname} />
       </div>
       <ul className={`game-players game-players--${players.length}`}>{players.map((player) => <li key={player.id} className={`${player.id === game.turnPlayerId ? 'active-turn ' : ''}${player.id === playerId ? 'self-seat ' : ''}${game.punishment?.eliminatedPlayerId === player.id ? 'is-newly-eliminated ' : ''}${!player.alive ? 'is-eliminated' : ''}`}>
         {player.characterId && <div className="character-portrait character-portrait--game" aria-hidden="true"><img src={characterImage(player.characterId, !player.alive ? 'eliminated' : game.phase === 'GAME_OVER' && player.id === game.winnerId ? 'victory' : 'idle')} alt="" /></div>}
-        <span className="seat-copy"><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><small>{player.id === game.turnPlayerId && game.phase === 'TURN' ? '出牌中 · ' : ''}{player.characterId ? CHARACTER_ART[player.characterId].name : '未选角色'} · {player.alive ? `${player.cards} 张手牌` : '已淘汰'}</small></span>
+        <span className="seat-copy"><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><small>{player.id === game.turnPlayerId && game.phase === 'TURN' ? '出牌中 · ' : ''}{player.characterId ? CHARACTER_ART[player.characterId].name : '未选角色'} · {player.alive ? `${formatCardCount(player.cards)} 张手牌` : '已淘汰'}</small></span>
       </li>)}</ul>
     </section>
-    {!isGameOver && <section className={`hand${tipsy ? ' hand--tipsy' : ''}`} aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card card--${card.toLowerCase()} ${selected.includes(index) ? 'selected' : ''}`} aria-pressed={selected.includes(index)} onClick={() => toggle(index)} disabled={!canPlay}>{card === 'JOKER' ? <img src="/assets/cards/joker.png" alt="Joker" /> : <span>{card}</span>}</button>)}</section>}
+    {!isGameOver && game.phase === 'CHALLENGE_WINDOW' && <ChallengeWindowPanel game={game} now={syncedNow} selfCanChallenge={canFreeChallenge} onChallenge={() => { if (!audioMuted) playUiTone(180); onChallenge(); }} />}
+    {!isGameOver && <section className={`hand${tipsy ? ' hand--tipsy' : ''}${game.tavernEvent?.type === 'NO_JOKER' ? ' hand--no-joker' : ''}`} aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card card--${card.toLowerCase()} ${selected.includes(index) ? 'selected' : ''}`} aria-pressed={selected.includes(index)} onClick={() => toggle(index)} disabled={!canPlay}>{card === 'JOKER' ? <img src="/assets/cards/joker.png" alt="Joker" /> : <span>{card}</span>}</button>)}</section>}
     {!isGameOver && <button className="button button--primary button--art-start play-button" disabled={!canSubmitPlay} onClick={play}>出 {selected.length || ''} 张牌</button>}
     {!isGameOver && (game.items.length > 0 || activeItemEffect || activeAbilityEffect) && <div className="item-dock">
       {activeAbilityEffect && <p className={`ability-effect ability-effect--${activeAbilityEffect.riskLevel?.toLowerCase() ?? 'neutral'}`} aria-live="polite"><strong>{activeAbilityEffect.title}</strong>{activeAbilityEffect.message}</p>}
@@ -105,7 +114,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
         </button>;
       })}</div>}
     </div>}
-    {canChallenge && <button className="button button--secondary button--art-challenge play-button" onClick={() => { if (!audioMuted) playUiTone(180); onChallenge(); }}>质疑上一手</button>}
+    {canChallenge && game.phase !== 'CHALLENGE_WINDOW' && <button className="button button--secondary button--art-challenge play-button" onClick={() => { if (!audioMuted) playUiTone(180); onChallenge(); }}>质疑上一手</button>}
     {game.challengeResult && <div className="challenge-result" aria-live="polite"><img src="/assets/effects/challenge_burst.png" alt="" aria-hidden="true" /><p>翻牌：{game.challengeResult.revealedCards.join('、')}；{game.challengeResult.wasBluff ? '上一位玩家撒谎' : '质疑失败'}，失败者：{players.find((player) => player.id === game.challengeResult?.failedPlayerId)?.nickname}</p></div>}
     {game.punishment && <p className="future-note">轮盘第 {game.punishment.chamber + 1} 弹巢：{game.punishment.hit ? '中弹淘汰' : '空枪，继续游戏'}。</p>}
     <CinematicLayer room={room} game={game} now={syncedNow} />
@@ -161,10 +170,45 @@ function TavernEventBanner({ event }: { event: NonNullable<GameView['tavernEvent
   </aside>;
 }
 
+function SharedRevolverHud({ state, reloaded }: { state: NonNullable<GameView['sharedRevolver']>; reloaded: boolean }) {
+  const spent = Math.min(state.currentChamber, state.chamberCount);
+  return <aside className="shared-revolver-hud" aria-label="共享左轮状态">
+    <strong>共享左轮</strong>
+    <div className="shared-revolver-hud__track" aria-hidden="true">
+      {Array.from({ length: state.chamberCount }, (_, index) => <span key={index} className={index < spent ? 'is-spent' : ''} />)}
+    </div>
+    <p>连续空膛：{spent} · 剩余膛位：{state.chamberCount - spent}</p>
+    {reloaded && <small>重新装填并旋转弹巢</small>}
+  </aside>;
+}
+
+function ChallengeWindowPanel({ game, now, selfCanChallenge, onChallenge }: { game: GameView; now: number; selfCanChallenge: boolean; onChallenge: () => void }) {
+  const remaining = game.freeChallenge ? Math.max(0, ((game.freeChallenge.endsAt - now) / 1_000)).toFixed(1) : '0.0';
+  return <aside className="challenge-window-panel" aria-live="polite">
+    <strong>质疑窗口</strong>
+    <span>{remaining}s</span>
+    <p>{game.lastPlay ? `上一手声明 ${game.lastPlay.claimedRank} × ${game.lastPlay.count}` : '等待质疑'}</p>
+    <button type="button" disabled={!selfCanChallenge} onClick={onChallenge}>{selfCanChallenge ? '质疑！' : '等待其他玩家质疑'}</button>
+  </aside>;
+}
+
 function canUseItem(item: GameView['items'][number], game: GameView, playerId: string | null): boolean {
   if (!playerId || !game.alivePlayerIds.includes(playerId) || game.phase !== 'TURN') return false;
   if (item === 'POCKET_WATCH') return game.turnPlayerId === playerId;
   return true;
+}
+
+function formatCardCount(count: number | null): string {
+  return count === null ? '?' : String(count);
+}
+
+function describeModeRule(game: GameView, secondsLeft: number | null): string | null {
+  if (game.phase === 'CHALLENGE_WINDOW') return `全民质疑：所有其他存活玩家可抢先质疑${secondsLeft !== null ? `，剩余 ${secondsLeft} 秒` : ''}`;
+  if (game.gameMode === 'ESCALATION' && game.phase === 'TURN') return `加注模式：本次至少出 ${game.minimumPlayCount} 张`;
+  if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'NO_JOKER') return '禁忌小丑：Joker 本轮按假牌判定';
+  if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'FORCED_BET') return `强制豪赌：本次至少出 ${game.minimumPlayCount} 张`;
+  if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'DRUNKEN') return '醉酒之夜：本轮出牌方向反转';
+  return null;
 }
 
 function describeItem(item: GameView['items'][number]): string {
@@ -178,10 +222,12 @@ function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPla
   if (game.phase === 'ROUND_START') return `第 ${game.roundNumber} 轮开始，目标牌 ${game.targetCard}`;
   if (game.phase === 'TURN') {
     if (game.mustChallenge) return `${currentPlayerName ?? '玩家'} 必须质疑上一手`;
+    if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'FORCED_BET' && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 至少出 ${game.minimumPlayCount} 张或质疑`;
     if (game.gameMode === 'ESCALATION' && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 至少出 ${game.minimumPlayCount} 张或质疑`;
     if (game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，等待 ${currentPlayerName ?? '玩家'} 行动`;
     return `等待 ${currentPlayerName ?? '玩家'} 出牌`;
   }
+  if (game.phase === 'CHALLENGE_WINDOW') return '全民质疑窗口开启，等待抢先质疑';
   if (game.phase === 'CHALLENGE_CALLOUT') return '质疑发起，所有操作已锁定';
   if (game.phase === 'REVEAL') return game.tavernEvent?.type === 'CANDLE_FLICKER' ? '烛火摇曳，正在逐张揭牌' : '正在逐张揭牌';
   if (game.phase === 'VERDICT') return game.challenge?.wasBluff ? '质疑成功，谎言成立' : '质疑失败，声明成立';
@@ -193,6 +239,9 @@ function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPla
 function describeNewPlayerHint(game: GameView, isTurn: boolean): string | null {
   if (game.phase === 'ROUND_START') return `本轮目标是 ${game.targetCard}。你可以出任意牌，但声明都会按 ${game.targetCard} 处理。`;
   if (isTurn && game.gameMode === 'ESCALATION' && game.lastPlay) return `加注模式：这手至少出 ${game.minimumPlayCount} 张，也可以质疑上一手。`;
+  if (game.gameMode === 'FREE_CHALLENGE' && game.phase === 'CHALLENGE_WINDOW') return '全民质疑：不是出牌者的存活玩家都可以抢先质疑。';
+  if (game.gameMode === 'SHARED_REVOLVER' && game.sharedRevolver) return '死亡左轮：全桌共用一把枪，连续空膛会保留到下一次惩罚。';
+  if (game.gameMode === 'PARTY' && game.tavernEvent) return `${game.tavernEvent.title}：${game.tavernEvent.description}`;
   if (isTurn && !game.lastPlay) return '选择 1 至 3 张手牌，然后点击出牌。真实牌面可以和目标牌不同。';
   if (isTurn && game.lastPlay) return '你可以相信上一手继续出牌，也可以质疑。质疑失败会由你受罚。';
   if (game.phase === 'REVEAL') return '质疑后会逐张揭示真实牌面，Joker 视为真实目标牌。';

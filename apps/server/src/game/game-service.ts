@@ -1,6 +1,7 @@
 import {
   MAX_CARDS_PER_PLAY,
   V7_ITEM_IDS,
+  V7_PARTY_EVENT_TYPES,
   V7_TAVERN_EVENT_TYPES,
   type ActiveItemId,
   type CardRank,
@@ -15,6 +16,7 @@ import {
   type PrivateItemEffect,
   type PublicChallengeState,
   type PublicPunishmentState,
+  type PublicSharedRevolverState,
   type PublicTavernEvent,
   type RevolverState,
   type RoomView,
@@ -36,8 +38,8 @@ interface PendingChallenge {
   revealedCards: CardRank[];
   wasBluff: boolean;
   punishedPlayerId: string;
-  chamber: number;
-  hit: boolean;
+  shots: Array<{ chamber: number; hit: boolean }>;
+  publishedShotCount: number;
   resultPublished: boolean;
 }
 
@@ -63,6 +65,7 @@ interface InternalGame {
   pendingChallenge: PendingChallenge | null;
   punishment: PublicPunishmentState | null;
   revolvers: Map<string, RevolverState>;
+  sharedRevolver: RevolverState | null;
   winnerId: string | null;
   gameMode: PlayableGameMode;
   turnDurationSeconds: number;
@@ -73,6 +76,9 @@ interface InternalGame {
   abilityEffects: Map<string, PrivateAbilityEffect>;
   abilityUsedKeys: Set<string>;
   tavernEvent: PublicTavernEvent | null;
+  previousPartyEventType: (typeof partyEventPool)[number] | null;
+  turnDirection: 'CLOCKWISE' | 'COUNTERCLOCKWISE';
+  freeChallengeWindow: { challengedId: string; openedAt: number; endsAt: number; challengerId: string | null } | null;
   discardCount: number;
   startedAt: number;
   challengeCount: number;
@@ -101,7 +107,9 @@ export interface PhaseAdvanceResult {
 const targets = ['A', 'K', 'Q'] as const;
 const activeItemPool = V7_ITEM_IDS;
 const tavernEventPool = V7_TAVERN_EVENT_TYPES;
+const partyEventPool = V7_PARTY_EVENT_TYPES;
 const TAVERN_EVENT_CHANCE_PERCENT = 25;
+const FREE_CHALLENGE_WINDOW_MS = 3_000;
 const POCKET_WATCH_EXTENSION_SECONDS = 7;
 const ITEM_EFFECT_DURATION_MS = 18_000;
 const ABILITY_EFFECT_DURATION_MS = 20_000;
@@ -164,6 +172,7 @@ export class GameService {
       pendingChallenge: null,
       punishment: null,
       revolvers: new Map(playerOrder.map((playerId) => [playerId, this.createRevolver()])),
+      sharedRevolver: gameMode === 'SHARED_REVOLVER' ? this.createRevolver() : null,
       winnerId: null,
       gameMode,
       turnDurationSeconds,
@@ -174,6 +183,9 @@ export class GameService {
       abilityEffects: new Map(),
       abilityUsedKeys: new Set(),
       tavernEvent: null,
+      previousPartyEventType: null,
+      turnDirection: 'CLOCKWISE',
+      freeChallengeWindow: null,
       discardCount: 0,
       startedAt: Date.now(),
       challengeCount: 0,
@@ -215,9 +227,16 @@ export class GameService {
     game.lastPlay = { playerId, cards, count: cards.length };
     game.discardCount += cards.length;
     const nextPlayerId = this.nextAlivePlayerId(game, playerId);
-    game.turnPlayerId = nextPlayerId;
-    game.mustChallenge = hand.length === 0 || this.shouldForceChallengeNextTurn(game, nextPlayerId);
-    this.enterPhase(game, 'TURN', this.turnDurationMs(game));
+    game.freeChallengeWindow = null;
+    if (game.gameMode === 'FREE_CHALLENGE') {
+      game.turnPlayerId = null;
+      game.mustChallenge = false;
+      this.openFreeChallengeWindow(game, playerId);
+    } else {
+      game.turnPlayerId = nextPlayerId;
+      game.mustChallenge = hand.length === 0 || this.shouldForceChallengeNextTurn(game, nextPlayerId);
+      this.enterPhase(game, 'TURN', this.turnDurationMs(game));
+    }
 
     const state = this.getView(roomCode, playerId);
     return {
@@ -235,26 +254,33 @@ export class GameService {
 
   challenge(roomCode: string, challengerId: string): ChallengeResult {
     const game = this.requireGame(roomCode);
-    this.requireTurn(game, challengerId);
+    if (game.gameMode === 'FREE_CHALLENGE' && game.pendingChallenge && game.pendingChallenge.challengedId === game.lastPlay?.playerId) {
+      throw new RoomError('CHALLENGE_ALREADY_TAKEN', '已经有玩家抢先质疑');
+    }
+    if (game.phase === 'CHALLENGE_WINDOW') this.requireFreeChallenge(game, challengerId);
+    else this.requireTurn(game, challengerId);
     if (!game.lastPlay) throw new RoomError('NO_PLAY_TO_CHALLENGE', '当前没有可质疑的上一手');
 
-    const wasBluff = game.lastPlay.cards.some((card) => card !== game.targetRank && card !== 'JOKER');
+    if (game.freeChallengeWindow) game.freeChallengeWindow.challengerId = challengerId;
+    const wasBluff = game.lastPlay.cards.some((card) => !this.isTruthCard(game, card));
     const punishedPlayerId = wasBluff ? game.lastPlay.playerId : challengerId;
-    const shot = this.resolveRevolverShot(game, punishedPlayerId);
+    const shots = this.resolvePunishmentShots(game, punishedPlayerId);
     game.pendingChallenge = {
       challengerId,
       challengedId: game.lastPlay.playerId,
       revealedCards: [...game.lastPlay.cards],
       wasBluff,
       punishedPlayerId,
-      chamber: shot.chamber,
-      hit: shot.hit,
+      shots,
+      publishedShotCount: 0,
       resultPublished: false,
     };
     game.challengeCount += 1;
     if (wasBluff) game.successfulChallenges += 1;
     else game.failedChallenges += 1;
     game.mustChallenge = false;
+    game.turnPlayerId = null;
+    game.freeChallengeWindow = null;
     this.enterPhase(game, 'CHALLENGE_CALLOUT', cinematicTiming.CHALLENGE_CALLOUT);
 
     const state = this.getView(roomCode, challengerId);
@@ -282,6 +308,23 @@ export class GameService {
     return this.playCards(roomCode, game.turnPlayerId, this.pickAutoCardIndexes(hand.length, minimumPlayCount));
   }
 
+  private resolveFreeChallengeTimeout(roomCode: string): ChallengeResult | null {
+    const game = this.requireGame(roomCode);
+    const lastPlay = game.lastPlay;
+    if (!lastPlay) throw new RoomError('NO_PLAY_TO_CHALLENGE', '当前没有可质疑的上一手');
+    if ((game.hands.get(lastPlay.playerId)?.length ?? 0) === 0) {
+      const challengerId = this.nextAlivePlayerId(game, lastPlay.playerId);
+      if (!challengerId) throw new RoomError('NO_CHALLENGER_AVAILABLE', '当前没有可质疑的玩家');
+      return this.challenge(roomCode, challengerId);
+    }
+    game.freeChallengeWindow = null;
+    const nextPlayerId = this.nextAlivePlayerId(game, lastPlay.playerId);
+    game.turnPlayerId = nextPlayerId;
+    game.mustChallenge = this.shouldForceChallengeNextTurn(game, nextPlayerId);
+    this.enterPhase(game, 'TURN', this.turnDurationMs(game));
+    return null;
+  }
+
   useItem(roomCode: string, playerId: string, itemId: ActiveItemId): GameSnapshot {
     const game = this.requireGame(roomCode);
     if (!game.v7.itemsEnabled) throw new RoomError('FEATURE_DISABLED', 'V7 道具未开启');
@@ -306,6 +349,11 @@ export class GameService {
       case 'TURN': {
         const result = this.autoAct(roomCode);
         return { state: result.state, cues: [result.cue], eliminatedPlayerId, gameOver };
+      }
+      case 'CHALLENGE_WINDOW': {
+        const result = this.resolveFreeChallengeTimeout(roomCode);
+        if (result) return { state: result.state, cues: [result.cue], eliminatedPlayerId, gameOver };
+        break;
       }
       case 'ROUND_START':
         this.enterPhase(game, 'TURN', this.turnDurationMs(game));
@@ -333,10 +381,14 @@ export class GameService {
             roundNumber: game.roundNumber,
           });
         }
-        this.enterPhase(game, 'PUNISHMENT_RESULT', game.pendingChallenge?.hit ? 1_650 : 1_250);
+        this.enterPhase(game, 'PUNISHMENT_RESULT', game.punishment?.hit ? 1_650 : 1_250);
         break;
       case 'PUNISHMENT_RESULT':
-        this.enterPhase(game, 'ROUND_END', cinematicTiming.ROUND_END);
+        if (this.hasPendingPunishmentShot(game)) this.enterPhase(game, 'PUNISHMENT_TRIGGER', this.punishmentTriggerDurationMs(game));
+        else {
+          this.finalizeChallengeRound(game);
+          this.enterPhase(game, 'ROUND_END', cinematicTiming.ROUND_END);
+        }
         break;
       case 'ROUND_END':
         if (game.alivePlayerIds.size <= 1) {
@@ -397,16 +449,18 @@ export class GameService {
       turnPlayerId: game.turnPlayerId,
       mustChallenge: game.mustChallenge,
       minimumPlayCount: this.minimumPlayCount(game),
+      turnDirection: game.turnDirection,
       players: game.playerOrder.map((playerId, seatIndex) => {
         const handCount = game.hands.get(playerId)?.length ?? 0;
+        const visibleHandCount = this.shouldHideHandCount(game, viewerId, playerId) ? null : handCount;
         return {
           playerId,
           name: game.playerNames.get(playerId) ?? playerId,
           seatIndex,
           connected: game.connectedPlayerIds.has(playerId),
           alive: game.alivePlayerIds.has(playerId),
-          handCount,
-          cardCount: handCount,
+          handCount: visibleHandCount,
+          cardCount: visibleHandCount,
         };
       }),
       hand: [...hand],
@@ -415,6 +469,8 @@ export class GameService {
       challenge,
       punishment: game.punishment ? { ...game.punishment } : null,
       winner: game.winnerId ? { winnerId: game.winnerId } : null,
+      freeChallenge: game.freeChallengeWindow ? { ...game.freeChallengeWindow } : null,
+      sharedRevolver: this.getPublicSharedRevolver(game),
       alivePlayerIds: [...game.alivePlayerIds],
       winnerId: game.winnerId,
       summary,
@@ -451,9 +507,21 @@ export class GameService {
     game.revolvers.set(playerId, { ...revolver });
   }
 
+  debugSetSharedRevolver(roomCode: string, revolver: RevolverState): void {
+    const game = this.requireGame(roomCode);
+    game.sharedRevolver = { ...revolver };
+  }
+
   debugSetItems(roomCode: string, playerId: string, items: ActiveItemId[]): void {
     const game = this.requireGame(roomCode);
     game.itemInventories.set(playerId, [...items]);
+  }
+
+  debugSetTavernEvent(roomCode: string, type: PublicTavernEvent['type'] | null): void {
+    const game = this.requireGame(roomCode);
+    game.tavernEvent = type ? this.createTavernEvent(type, game.roundNumber, type === 'RAPID_NIGHT' ? 10 : game.turnDurationSeconds) : null;
+    game.roundTurnDurationSeconds = game.tavernEvent?.turnDurationSeconds ?? game.turnDurationSeconds;
+    game.turnDirection = game.tavernEvent?.type === 'DRUNKEN' ? 'COUNTERCLOCKWISE' : 'CLOCKWISE';
   }
 
   private startRound(game: InternalGame, starterId: string | null): void {
@@ -466,14 +534,18 @@ export class GameService {
       game.hands.set(playerId, deck.slice(seatIndex * 5, seatIndex * 5 + 5));
     }
     game.targetRank = targets[this.random.nextInt(targets.length)]!;
-    game.tavernEvent = this.drawTavernEvent(game.roundNumber, game.turnDurationSeconds, game.v7.tavernEventsEnabled);
+    game.tavernEvent = game.gameMode === 'PARTY'
+      ? this.drawPartyEvent(game)
+      : this.drawTavernEvent(game.roundNumber, game.turnDurationSeconds, game.v7.tavernEventsEnabled);
     game.roundTurnDurationSeconds = game.tavernEvent?.turnDurationSeconds ?? game.turnDurationSeconds;
+    game.turnDirection = game.tavernEvent?.type === 'DRUNKEN' ? 'COUNTERCLOCKWISE' : 'CLOCKWISE';
     game.turnPlayerId = starterId && game.alivePlayerIds.has(starterId) ? starterId : alivePlayers[0] ?? null;
     game.nextRoundStarterId = game.turnPlayerId;
     game.lastPlay = null;
     game.mustChallenge = false;
     game.pendingChallenge = null;
     game.punishment = null;
+    game.freeChallengeWindow = null;
     game.discardCount = 0;
     this.enterPhase(game, 'ROUND_START', cinematicTiming.ROUND_START);
   }
@@ -483,7 +555,11 @@ export class GameService {
     if (!pending) throw new RoomError('PUNISHMENT_NOT_ALLOWED', '当前没有惩罚结果');
     if (pending.resultPublished) return { eliminatedPlayerId: game.punishment?.eliminatedPlayerId ?? null };
 
-    const eliminatedPlayerId = pending.hit ? pending.punishedPlayerId : null;
+    const shot = pending.shots[pending.publishedShotCount];
+    if (!shot) throw new RoomError('PUNISHMENT_NOT_ALLOWED', '当前没有可发布的惩罚枪次');
+    pending.publishedShotCount += 1;
+    const totalShots = pending.shots.length;
+    const eliminatedPlayerId = shot.hit ? pending.punishedPlayerId : null;
     if (eliminatedPlayerId) {
       game.alivePlayerIds.delete(eliminatedPlayerId);
       game.hands.set(eliminatedPlayerId, []);
@@ -493,19 +569,33 @@ export class GameService {
       game.eliminationOrder.push(eliminatedPlayerId);
       if (game.alivePlayerIds.size === 1) game.winnerId = [...game.alivePlayerIds][0]!;
     }
-    game.nextRoundStarterId = pending.hit
-      ? this.nextAlivePlayerId(game, pending.punishedPlayerId)
-      : pending.punishedPlayerId;
     game.turnPlayerId = null;
     game.punishment = {
       punishedPlayerId: pending.punishedPlayerId,
       playerId: pending.punishedPlayerId,
-      chamber: pending.chamber,
-      hit: pending.hit,
+      chamber: shot.chamber,
+      hit: shot.hit,
       eliminatedPlayerId,
+      shotNumber: pending.publishedShotCount,
+      totalShots,
     };
-    pending.resultPublished = true;
+    if (shot.hit || pending.publishedShotCount >= totalShots) pending.resultPublished = true;
     return { eliminatedPlayerId };
+  }
+
+  private finalizeChallengeRound(game: InternalGame): void {
+    const pending = game.pendingChallenge;
+    if (!pending) return;
+    game.nextRoundStarterId = game.punishment?.hit
+      ? this.nextAlivePlayerId(game, pending.punishedPlayerId)
+      : pending.punishedPlayerId;
+  }
+
+  private hasPendingPunishmentShot(game: InternalGame): boolean {
+    const pending = game.pendingChallenge;
+    if (!pending || pending.resultPublished) return false;
+    if (game.punishment?.hit) return false;
+    return pending.publishedShotCount < pending.shots.length;
   }
 
   private enterPhase(game: InternalGame, phase: GamePhase, durationMs: number | null): void {
@@ -515,6 +605,17 @@ export class GameService {
     game.phaseStartedAt = now;
     game.phaseEndsAt = durationMs === null ? null : now + durationMs;
     this.applyPhaseAbilities(game, now);
+  }
+
+  private openFreeChallengeWindow(game: InternalGame, challengedId: string): void {
+    const now = Date.now();
+    game.freeChallengeWindow = {
+      challengedId,
+      openedAt: now,
+      endsAt: now + FREE_CHALLENGE_WINDOW_MS,
+      challengerId: null,
+    };
+    this.enterPhase(game, 'CHALLENGE_WINDOW', FREE_CHALLENGE_WINDOW_MS);
   }
 
   private getPublicChallenge(game: InternalGame): PublicChallengeState | null {
@@ -716,7 +817,7 @@ export class GameService {
     const now = Date.now();
     switch (itemId) {
       case 'SPYGLASS': {
-        const revolver = game.revolvers.get(playerId);
+        const revolver = game.gameMode === 'SHARED_REVOLVER' ? game.sharedRevolver : game.revolvers.get(playerId);
         if (!revolver) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
         const riskLevel = revolver.currentChamber === revolver.bulletPosition ? 'HIGH' : 'LOW';
         return {
@@ -802,7 +903,7 @@ export class GameService {
   }
 
   private revolverRiskLevel(game: InternalGame, playerId: string): 'LOW' | 'HIGH' {
-    const revolver = game.revolvers.get(playerId);
+    const revolver = game.gameMode === 'SHARED_REVOLVER' ? game.sharedRevolver : game.revolvers.get(playerId);
     if (!revolver) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
     return revolver.currentChamber === revolver.bulletPosition ? 'HIGH' : 'LOW';
   }
@@ -829,10 +930,35 @@ export class GameService {
     return this.createTavernEvent(tavernEventPool[this.random.nextInt(tavernEventPool.length)]!, roundNumber, baseTurnDurationSeconds);
   }
 
+  private drawPartyEvent(game: InternalGame): PublicTavernEvent {
+    const choices = partyEventPool.filter((eventType) => eventType !== game.previousPartyEventType);
+    const type = choices[this.random.nextInt(choices.length)]!;
+    game.previousPartyEventType = type;
+    return this.createTavernEvent(type, game.roundNumber, type === 'RAPID_NIGHT' ? 10 : game.turnDurationSeconds);
+  }
+
   private createTavernEvent(type: (typeof tavernEventPool)[number], roundNumber: number, baseTurnDurationSeconds: number): PublicTavernEvent {
     switch (type) {
+      case 'BLACKOUT':
+        return {
+          type,
+          title: '漆黑之夜',
+          description: '本轮隐藏其他玩家的准确手牌数量。',
+          roundNumber,
+          turnDurationSeconds: null,
+          intensity: 'MEDIUM',
+        };
+      case 'DRUNKEN':
+        return {
+          type,
+          title: '醉酒之夜',
+          description: '本轮出牌方向反转。',
+          roundNumber,
+          turnDurationSeconds: null,
+          intensity: 'MEDIUM',
+        };
       case 'RAPID_NIGHT': {
-        const turnDurationSeconds = this.rapidNightTurnDurationSeconds(baseTurnDurationSeconds);
+        const turnDurationSeconds = this.gameModeRapidNightSeconds(baseTurnDurationSeconds);
         return {
           type,
           title: '快速夜',
@@ -855,7 +981,25 @@ export class GameService {
         return {
           type,
           title: '双倍危机',
-          description: '本轮惩罚阶段压力提升，但实弹数量不变。',
+          description: '本轮质疑失败者连续接受两次左轮判定。',
+          roundNumber,
+          turnDurationSeconds: null,
+          intensity: 'HIGH',
+        };
+      case 'NO_JOKER':
+        return {
+          type,
+          title: '禁忌小丑',
+          description: '本轮 Joker 不再是万能牌。',
+          roundNumber,
+          turnDurationSeconds: null,
+          intensity: 'HIGH',
+        };
+      case 'FORCED_BET':
+        return {
+          type,
+          title: '强制豪赌',
+          description: '本轮每次出牌至少 2 张。',
           roundNumber,
           turnDurationSeconds: null,
           intensity: 'HIGH',
@@ -873,6 +1017,14 @@ export class GameService {
     if (game.turnPlayerId !== playerId) throw new RoomError('NOT_YOUR_TURN', '现在不是你的回合');
   }
 
+  private requireFreeChallenge(game: InternalGame, playerId: string): void {
+    if (!game.lastPlay || !game.freeChallengeWindow) throw new RoomError('NO_PLAY_TO_CHALLENGE', '当前没有可质疑的上一手');
+    if (game.freeChallengeWindow.challengerId) throw new RoomError('CHALLENGE_ALREADY_TAKEN', '已经有玩家抢先质疑');
+    if (!game.alivePlayerIds.has(playerId)) throw new RoomError('PLAYER_ELIMINATED', '已淘汰玩家不能质疑');
+    if (!game.connectedPlayerIds.has(playerId)) throw new RoomError('PLAYER_DISCONNECTED', '离线玩家不能质疑');
+    if (game.lastPlay.playerId === playerId) throw new RoomError('CANNOT_CHALLENGE_SELF', '不能质疑自己的出牌');
+  }
+
   private requireAlivePlayer(game: InternalGame, playerId: string): void {
     if (!game.playerOrder.includes(playerId)) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
     if (!game.alivePlayerIds.has(playerId)) throw new RoomError('PLAYER_ELIMINATED', '已淘汰玩家不能使用道具');
@@ -881,8 +1033,9 @@ export class GameService {
   private nextAlivePlayerId(game: InternalGame, playerId: string): string | null {
     if (game.alivePlayerIds.size === 0) return null;
     const start = game.playerOrder.indexOf(playerId);
+    const step = game.turnDirection === 'COUNTERCLOCKWISE' ? -1 : 1;
     for (let offset = 1; offset <= game.playerOrder.length; offset += 1) {
-      const candidate = game.playerOrder[(start + offset + game.playerOrder.length) % game.playerOrder.length]!;
+      const candidate = game.playerOrder[(start + offset * step + game.playerOrder.length * 2) % game.playerOrder.length]!;
       if (game.alivePlayerIds.has(candidate)) return candidate;
     }
     return null;
@@ -916,14 +1069,15 @@ export class GameService {
   }
 
   private minimumPlayCount(game: InternalGame): number {
-    if (game.gameMode !== 'ESCALATION' || !game.lastPlay) return 1;
-    return game.lastPlay.count;
+    const escalationMinimum = game.gameMode === 'ESCALATION' && game.lastPlay ? game.lastPlay.count : 1;
+    const forcedBetMinimum = game.gameMode === 'PARTY' && game.tavernEvent?.type === 'FORCED_BET' && game.lastPlay ? 2 : 1;
+    return Math.max(escalationMinimum, forcedBetMinimum);
   }
 
   private shouldForceChallengeNextTurn(game: InternalGame, playerId: string | null): boolean {
-    if (game.gameMode !== 'ESCALATION' || !game.lastPlay || !playerId) return false;
+    if (!game.lastPlay || !playerId) return false;
     const hand = game.hands.get(playerId) ?? [];
-    return hand.length < game.lastPlay.count;
+    return hand.length < this.minimumPlayCount(game);
   }
 
   private pickAutoCardIndexes(handLength: number, count: number): number[] {
@@ -936,7 +1090,7 @@ export class GameService {
     return picked.sort((a, b) => a - b);
   }
 
-  private rapidNightTurnDurationSeconds(baseTurnDurationSeconds: number): number {
+  private gameModeRapidNightSeconds(baseTurnDurationSeconds: number): number {
     return Math.max(5, baseTurnDurationSeconds - 5);
   }
 
@@ -949,13 +1103,43 @@ export class GameService {
   }
 
   private resolveRevolverShot(game: InternalGame, playerId: string): { chamber: number; hit: boolean } {
-    const revolver = game.revolvers.get(playerId);
+    const revolver = game.gameMode === 'SHARED_REVOLVER' ? game.sharedRevolver : game.revolvers.get(playerId);
     if (!revolver) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
     const chamber = revolver.currentChamber;
     const hit = chamber === revolver.bulletPosition;
     revolver.currentChamber = (revolver.currentChamber + 1) % revolver.chamberCount;
     revolver.shotsTaken += 1;
+    if (hit && game.gameMode === 'SHARED_REVOLVER') game.sharedRevolver = this.createRevolver();
     return { chamber, hit };
+  }
+
+  private resolvePunishmentShots(game: InternalGame, playerId: string): Array<{ chamber: number; hit: boolean }> {
+    const shots = [this.resolveRevolverShot(game, playerId)];
+    if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'DOUBLE_DANGER' && !shots[0]!.hit) {
+      shots.push(this.resolveRevolverShot(game, playerId));
+    }
+    return shots;
+  }
+
+  private isTruthCard(game: InternalGame, card: CardRank): boolean {
+    if (card === game.targetRank) return true;
+    if (card === 'JOKER') return game.tavernEvent?.type !== 'NO_JOKER';
+    return false;
+  }
+
+  private shouldHideHandCount(game: InternalGame, viewerId: string, playerId: string): boolean {
+    return game.gameMode === 'PARTY'
+      && game.tavernEvent?.type === 'BLACKOUT'
+      && viewerId !== playerId;
+  }
+
+  private getPublicSharedRevolver(game: InternalGame): PublicSharedRevolverState | null {
+    if (game.gameMode !== 'SHARED_REVOLVER' || !game.sharedRevolver) return null;
+    return {
+      chamberCount: game.sharedRevolver.chamberCount,
+      currentChamber: game.sharedRevolver.currentChamber,
+      shotsTaken: game.sharedRevolver.shotsTaken,
+    };
   }
 
   private createRevolver(): RevolverState {
@@ -968,7 +1152,7 @@ export class GameService {
   }
 
   private requirePlayableMode(gameMode: GameMode): PlayableGameMode {
-    if (gameMode !== 'CLASSIC' && gameMode !== 'QUICK' && gameMode !== 'ESCALATION') throw new RoomError('FEATURE_DISABLED', '当前只开放 Classic、Quick 和加注模式');
+    if (gameMode === 'CUSTOM') throw new RoomError('FEATURE_DISABLED', '自定义模式尚未开放');
     return gameMode;
   }
 

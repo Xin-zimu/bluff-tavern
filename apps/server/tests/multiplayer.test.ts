@@ -82,7 +82,7 @@ describe('real Socket.IO multiplayer', () => {
       const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
       if (!started.ok) throw new Error(started.error.message);
       expect(started.data.players).toHaveLength(8);
-      expect(started.data.players.reduce((sum, player) => sum + player.cardCount, 0)).toBe(40);
+      expect(started.data.players.reduce((sum, player) => sum + (player.cardCount ?? 0), 0)).toBe(40);
       const last = joined[6]!;
       last.peer.disconnect();
       await new Promise((resolve) => setTimeout(resolve, 30));
@@ -115,7 +115,7 @@ describe('real Socket.IO multiplayer', () => {
       expect(started).toMatchObject({ ok: true, data: { gameMode: 'QUICK', turnDurationSeconds: 7 } });
       if (!started.ok) throw new Error('Game did not start');
       expect(started.data.players).toHaveLength(6);
-      expect(started.data.players.reduce((sum, player) => sum + player.cardCount, 0)).toBe(30);
+      expect(started.data.players.reduce((sum, player) => sum + (player.cardCount ?? 0), 0)).toBe(30);
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;

@@ -455,5 +455,5 @@ function mergeV7Settings(previous: RoomView['settings']['v7'], patch: V7Settings
 
 function turnDurationForMode(gameMode: RoomView['settings']['gameMode'], requestedSeconds: number): number {
   if (gameMode === 'QUICK') return 7;
-  return gameMode === 'CLASSIC' || gameMode === 'ESCALATION' ? 15 : requestedSeconds;
+  return gameMode === 'CUSTOM' ? requestedSeconds : 15;
 }

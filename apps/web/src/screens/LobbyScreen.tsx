@@ -5,9 +5,10 @@ const MODE_OPTIONS: Array<{ id: GameMode; title: string; badge: string; descript
   { id: 'CLASSIC', title: '经典模式', badge: '15 秒', description: '标准诈唬、质疑、左轮惩罚。', enabled: true },
   { id: 'QUICK', title: '快速模式', badge: '7 秒', description: '更短回合倒计时，保持原规则。', enabled: true },
   { id: 'ESCALATION', title: '加注模式', badge: '新开放', description: '每手出牌数不得低于上一手。', enabled: true },
-  { id: 'SHARED_REVOLVER', title: '死亡左轮', badge: '计划中', description: '全桌共用一把左轮。', enabled: false },
-  { id: 'FREE_CHALLENGE', title: '全民质疑', badge: '计划中', description: '多人抢先质疑窗口。', enabled: false },
-  { id: 'PARTY', title: '酒馆乱斗', badge: '计划中', description: '每轮一个随机酒馆事件。', enabled: false },
+  { id: 'SHARED_REVOLVER', title: '死亡左轮', badge: '新开放', description: '全桌共用一把左轮。', enabled: true },
+  { id: 'FREE_CHALLENGE', title: '全民质疑', badge: '新开放', description: '多人抢先质疑窗口。', enabled: true },
+  { id: 'PARTY', title: '酒馆乱斗', badge: '新开放', description: '每轮一个随机酒馆事件。', enabled: true },
+  { id: 'CUSTOM', title: '自定义', badge: '计划中', description: '自由组合规则参数。', enabled: false },
 ];
 
 const V7_FEATURE_SWITCHES: Array<{ key: keyof V7ExtensionSettings; label: string }> = [
@@ -17,12 +18,12 @@ const V7_FEATURE_SWITCHES: Array<{ key: keyof V7ExtensionSettings; label: string
 ];
 
 function toPlayableMode(gameMode: RoomView['settings']['gameMode']): PlayableGameMode {
-  if (gameMode === 'ESCALATION') return 'ESCALATION';
-  return gameMode === 'QUICK' ? 'QUICK' : 'CLASSIC';
+  if (gameMode === 'CUSTOM') return 'CLASSIC';
+  return gameMode;
 }
 
 function isPlayableMode(gameMode: GameMode): gameMode is PlayableGameMode {
-  return gameMode === 'CLASSIC' || gameMode === 'QUICK' || gameMode === 'ESCALATION';
+  return gameMode !== 'CUSTOM';
 }
 
 interface LobbyProps {
