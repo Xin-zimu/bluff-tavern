@@ -140,9 +140,10 @@ describe('real Socket.IO multiplayer', () => {
         roomCode: created.data.room.code,
         maxPlayers: 2,
         gameMode: 'ESCALATION',
+        v7: { tavernEventsEnabled: true },
         requestId: randomUUID(),
       });
-      expect(settings).toMatchObject({ ok: true, data: { settings: { gameMode: 'ESCALATION', turnDurationSeconds: 15 } } });
+      expect(settings).toMatchObject({ ok: true, data: { settings: { gameMode: 'ESCALATION', turnDurationSeconds: 15, v7: { tavernEventsEnabled: false } } } });
       await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
         roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
       })));

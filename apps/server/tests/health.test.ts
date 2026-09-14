@@ -20,7 +20,7 @@ describe('health endpoint', () => {
       expect(response.statusCode).toBe(200);
       expect(payload).toMatchObject({
         status: 'ok',
-        version: '7.1.1',
+        version: '7.1.2',
         rooms: 0,
         connections: 0,
         players: 0,

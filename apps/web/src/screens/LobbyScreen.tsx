@@ -26,6 +26,10 @@ function isPlayableMode(gameMode: GameMode): gameMode is PlayableGameMode {
   return gameMode !== 'CUSTOM';
 }
 
+function supportsLegacyTavernEvents(gameMode: PlayableGameMode): boolean {
+  return gameMode === 'CLASSIC' || gameMode === 'QUICK';
+}
+
 interface LobbyProps {
   room: RoomView;
   playerId: string | null;
@@ -49,6 +53,7 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
     turnDurationSeconds: gameMode === 'QUICK' ? 7 : 15,
     eventEnabled: false,
     bulletCount: null,
+    v7: { ...extensionSettings, tavernEventsEnabled: supportsLegacyTavernEvents(gameMode) ? extensionSettings.tavernEventsEnabled : false },
   });
   const updateExtension = (key: keyof V7ExtensionSettings, enabled: boolean) => onSettingsChange({
     ...room.settings,
@@ -91,14 +96,25 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
         })}
       </section>
       <div className={`feature-switches${isHost ? '' : ' feature-switches--readonly'}`} aria-label="V7 扩展玩法开关">
-        {V7_FEATURE_SWITCHES.map((feature) => <label className="feature-switch" key={feature.key}>
-          {isHost ? <>
-            <input type="checkbox" checked={extensionSettings[feature.key]} onChange={(event) => updateExtension(feature.key, event.target.checked)} />
-            <span className="feature-switch__toggle" aria-hidden="true" />
-          </> : <span className={`feature-switch__status${extensionSettings[feature.key] ? ' is-enabled' : ''}`} aria-hidden="true" />}
-          <span>{feature.label}</span>
-          <small>{extensionSettings[feature.key] ? '已开启' : '关闭'}</small>
-        </label>)}
+        {V7_FEATURE_SWITCHES.map((feature) => {
+          const tavernSwitch = feature.key === 'tavernEventsEnabled';
+          const legacyEventsAllowed = supportsLegacyTavernEvents(selectedMode);
+          const lockedTavernSwitch = tavernSwitch && !legacyEventsAllowed;
+          const effectiveEnabled = tavernSwitch && selectedMode === 'PARTY' ? true : tavernSwitch && !legacyEventsAllowed ? false : extensionSettings[feature.key];
+          const status = tavernSwitch && selectedMode === 'PARTY'
+            ? 'Party 固定启用'
+            : tavernSwitch && !legacyEventsAllowed
+              ? '特殊模式不叠加'
+              : effectiveEnabled ? '已开启' : '关闭';
+          return <label className={`feature-switch${lockedTavernSwitch ? ' feature-switch--locked' : ''}`} key={feature.key}>
+            {isHost && !lockedTavernSwitch ? <>
+              <input type="checkbox" checked={extensionSettings[feature.key]} onChange={(event) => updateExtension(feature.key, event.target.checked)} />
+              <span className="feature-switch__toggle" aria-hidden="true" />
+            </> : <span className={`feature-switch__status${effectiveEnabled ? ' is-enabled' : ''}`} aria-hidden="true" />}
+            <span>{tavernSwitch && selectedMode === 'PARTY' ? '每轮随机事件' : feature.label}</span>
+            <small>{status}</small>
+          </label>;
+        })}
       </div>
       <ul className="player-list">
         {room.players.map((player) => <li key={player.id} className={player.id === playerId ? 'is-self' : ''}>

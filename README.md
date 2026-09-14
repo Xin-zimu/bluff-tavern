@@ -1,6 +1,6 @@
 # 诡牌酒馆 / Bluff Tavern
 
-手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V7.1.1**：保留 2–8 人服务器权威诈唬核心循环和 V7.0 已有扩展，并开放 Classic、Quick、Escalation、Shared Revolver、Free Challenge 与 Party 模式。
+手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V7.1.2**：保留 2–8 人服务器权威诈唬核心循环和 V7.0 已有扩展，并开放 Classic、Quick、Escalation、Shared Revolver、Free Challenge 与 Party 模式。
 
 ## 技术栈
 

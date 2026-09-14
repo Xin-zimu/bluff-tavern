@@ -152,7 +152,7 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
         turnDurationSeconds: turnDurationForMode(parsed.data.gameMode, parsed.data.turnDurationSeconds ?? previous.settings.turnDurationSeconds),
         eventEnabled: false,
         bulletCount: null,
-        v7: mergeV7Settings(previous.settings.v7, parsed.data.v7),
+        v7: mergeV7Settings(previous.settings.v7, parsed.data.v7, parsed.data.gameMode),
       });
       const result = { ok: true as const, data: room };
       processedRoomRequests.set(requestKey, result);
@@ -445,12 +445,16 @@ function roomRequestKey(roomCode: string, playerId: string, requestId: string): 
   return `${roomCode}:${playerId}:${requestId}`;
 }
 
-function mergeV7Settings(previous: RoomView['settings']['v7'], patch: V7SettingsPatch | undefined): RoomView['settings']['v7'] {
+function mergeV7Settings(previous: RoomView['settings']['v7'], patch: V7SettingsPatch | undefined, gameMode: RoomView['settings']['gameMode']): RoomView['settings']['v7'] {
   return {
     itemsEnabled: patch?.itemsEnabled ?? previous.itemsEnabled,
-    tavernEventsEnabled: patch?.tavernEventsEnabled ?? previous.tavernEventsEnabled,
+    tavernEventsEnabled: supportsLegacyTavernEvents(gameMode) ? patch?.tavernEventsEnabled ?? previous.tavernEventsEnabled : false,
     characterAbilitiesEnabled: patch?.characterAbilitiesEnabled ?? previous.characterAbilitiesEnabled,
   };
+}
+
+function supportsLegacyTavernEvents(gameMode: RoomView['settings']['gameMode']): boolean {
+  return gameMode === 'CLASSIC' || gameMode === 'QUICK';
 }
 
 function turnDurationForMode(gameMode: RoomView['settings']['gameMode'], requestedSeconds: number): number {

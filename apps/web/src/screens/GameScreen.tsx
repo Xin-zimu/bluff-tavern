@@ -116,7 +116,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
     </div>}
     {canChallenge && game.phase !== 'CHALLENGE_WINDOW' && <button className="button button--secondary button--art-challenge play-button" onClick={() => { if (!audioMuted) playUiTone(180); onChallenge(); }}>质疑上一手</button>}
     {game.challengeResult && <div className="challenge-result" aria-live="polite"><img src="/assets/effects/challenge_burst.png" alt="" aria-hidden="true" /><p>翻牌：{game.challengeResult.revealedCards.join('、')}；{game.challengeResult.wasBluff ? '上一位玩家撒谎' : '质疑失败'}，失败者：{players.find((player) => player.id === game.challengeResult?.failedPlayerId)?.nickname}</p></div>}
-    {game.punishment && <p className="future-note">轮盘第 {game.punishment.chamber + 1} 弹巢：{game.punishment.hit ? '中弹淘汰' : '空枪，继续游戏'}。</p>}
+    {game.punishment && <p className="future-note">{describePunishmentNote(game.punishment)}</p>}
     <CinematicLayer room={room} game={game} now={syncedNow} />
     {room.players.some((player) => !player.isConnected) && <div className="reconnect-overlay" aria-live="polite">有玩家暂时离线，对局状态会在重连后恢复。</div>}
     <RulesPanel open={rulesOpen} game={game} onClose={() => setRulesOpen(false)} />
@@ -215,6 +215,14 @@ function describeItem(item: GameView['items'][number]): string {
   if (item === 'SPYGLASS') return '查看自己下一次受罚风险';
   if (item === 'POCKET_WATCH') return '自己的回合延长倒计时';
   return '短暂干扰自己的界面提示，不改变判定';
+}
+
+function describePunishmentNote(punishment: NonNullable<GameView['punishment']>): string {
+  const shotPrefix = punishment.totalShots > 1 ? `第 ${punishment.shotNumber}/${punishment.totalShots} 枪，` : '';
+  const result = punishment.hit
+    ? '中弹淘汰'
+    : punishment.shotNumber < punishment.totalShots ? '空枪，还需再开一枪' : '空枪，继续游戏';
+  return `${shotPrefix}轮盘第 ${punishment.chamber + 1} 弹巢：${result}。`;
 }
 
 function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPlayerName?: string): string {

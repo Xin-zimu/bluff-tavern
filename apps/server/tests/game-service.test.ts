@@ -30,10 +30,10 @@ function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings 
 
 const deterministic = () => new GameService({ nextInt: () => 0 });
 
-const eventRandom = (eventIndex: 2 | 3 | 4) => new GameService({
+const eventRandom = (eventIndex: 0 | 1) => new GameService({
   nextInt: (maxExclusive) => {
     if (maxExclusive === 100) return 0;
-    if (maxExclusive === 7) return eventIndex;
+    if (maxExclusive === 2) return eventIndex;
     return 0;
   },
 });
@@ -611,9 +611,8 @@ describe('V6 GameService rules', () => {
   });
 
   it.each([
-    ['RAPID_NIGHT', 2, 10],
-    ['CANDLE_FLICKER', 3, 15],
-    ['DOUBLE_DANGER', 4, 15],
+    ['RAPID_NIGHT', 0, 10],
+    ['CANDLE_FLICKER', 1, 15],
   ] as const)('draws the enabled tavern event %s into the public round snapshot', (eventType, eventIndex, expectedTurnSeconds) => {
     const room = makeRoom(2, 'ABC234', makeV7({ tavernEventsEnabled: true }));
     const service = eventRandom(eventIndex);
@@ -625,6 +624,17 @@ describe('V6 GameService rules', () => {
     expect(turn.tavernEvent).toMatchObject({ type: eventType, roundNumber: 1 });
     expect(turn.turnDurationSeconds).toBe(expectedTurnSeconds);
     expect((turn.phaseEndsAt ?? 0) - turn.phaseStartedAt).toBe(expectedTurnSeconds * 1_000);
+  });
+
+  it.each(['ESCALATION', 'SHARED_REVOLVER', 'FREE_CHALLENGE'] as const)('does not stack legacy tavern events onto %s mode', (gameMode) => {
+    const room = makeRoom(2, 'ABC234', makeV7({ tavernEventsEnabled: true }), [], gameMode);
+    const service = eventRandom(0);
+
+    const round = service.start(room);
+    const turn = service.advancePhase(room.code).state;
+
+    expect(round.tavernEvent).toBeNull();
+    expect(turn.tavernEvent).toBeNull();
   });
 
   it('does not draw tavern events when the chance roll misses', () => {

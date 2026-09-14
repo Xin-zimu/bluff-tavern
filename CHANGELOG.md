@@ -2,6 +2,15 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [7.1.2] - 2026-09-15
+
+### Fixed
+
+- 旧的 V7 酒馆事件扩展开关只允许 Classic / Quick 叠加，特殊模式不再抽取旧 Tavern Event。
+- Party 模式大厅改为显示“每轮随机事件”固定启用，避免误以为旧开关能关闭 Party 事件。
+- Legacy Tavern Event 池收回到 Rapid Night / Candle Flicker，Double Danger 只作为 Party 规则事件出现。
+- Double Danger 第一枪空枪时的底部提示改为“还需再开一枪”。
+
 ## [7.1.1] - 2026-09-14
 
 ### Fixed

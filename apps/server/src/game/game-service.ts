@@ -544,7 +544,7 @@ export class GameService {
     game.targetRank = targets[this.random.nextInt(targets.length)]!;
     game.tavernEvent = game.gameMode === 'PARTY'
       ? this.drawPartyEvent(game)
-      : this.drawTavernEvent(game.roundNumber, game.turnDurationSeconds, game.v7.tavernEventsEnabled);
+      : this.drawTavernEvent(game.roundNumber, game.turnDurationSeconds, this.supportsLegacyTavernEvents(game) && game.v7.tavernEventsEnabled);
     game.roundTurnDurationSeconds = game.tavernEvent?.turnDurationSeconds ?? game.turnDurationSeconds;
     game.turnDirection = game.tavernEvent?.type === 'DRUNKEN' ? 'COUNTERCLOCKWISE' : 'CLOCKWISE';
     game.turnPlayerId = starterId && game.alivePlayerIds.has(starterId) ? starterId : alivePlayers[0] ?? null;
@@ -944,7 +944,7 @@ export class GameService {
     return this.createTavernEvent(type, game.roundNumber, type === 'RAPID_NIGHT' ? 10 : game.turnDurationSeconds);
   }
 
-  private createTavernEvent(type: (typeof tavernEventPool)[number], roundNumber: number, baseTurnDurationSeconds: number): PublicTavernEvent {
+  private createTavernEvent(type: PublicTavernEvent['type'], roundNumber: number, baseTurnDurationSeconds: number): PublicTavernEvent {
     switch (type) {
       case 'BLACKOUT':
         return {
@@ -1145,6 +1145,10 @@ export class GameService {
 
   private shouldPublishTavernEvent(game: InternalGame): boolean {
     return game.gameMode === 'PARTY' || game.v7.tavernEventsEnabled;
+  }
+
+  private supportsLegacyTavernEvents(game: InternalGame): boolean {
+    return game.gameMode === 'CLASSIC' || game.gameMode === 'QUICK';
   }
 
   private getPublicSharedRevolver(game: InternalGame): PublicSharedRevolverState | null {
