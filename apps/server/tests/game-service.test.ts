@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CardRank, RoomView, V7ExtensionSettings } from '@bluff-tavern/shared';
+import type { CardRank, CharacterId, RoomView, V7ExtensionSettings } from '@bluff-tavern/shared';
 import { GameService } from '../src/game/game-service.js';
 
 const defaultV7: V7ExtensionSettings = { itemsEnabled: false, tavernEventsEnabled: false, characterAbilitiesEnabled: false };
@@ -8,7 +8,7 @@ function makeV7(overrides: Partial<V7ExtensionSettings>): V7ExtensionSettings {
   return { ...defaultV7, ...overrides };
 }
 
-function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings = defaultV7): RoomView {
+function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings = defaultV7, characters: Array<CharacterId | null> = []): RoomView {
   return {
     id: code,
     code,
@@ -23,7 +23,7 @@ function makeRoom(playerCount: number, code = 'ABC234', v7: V7ExtensionSettings 
       status: 'PLAYING' as const,
       joinedAt: index,
       isConnected: true,
-      characterId: null,
+      characterId: characters[index] ?? null,
     })),
   };
 }
@@ -232,8 +232,107 @@ describe('V6 GameService rules', () => {
 
     expect(turn.items).toEqual([]);
     expect(turn.itemEffect).toBeNull();
+    expect(turn.abilityEffect).toBeNull();
     expect(turn.tavernEvent).toBeNull();
     expect(() => service.useItem(room.code, 'p1', 'SPYGLASS')).toThrow('道具未开启');
+  });
+
+  it('runs the wolf table-read ability as a private round hint', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['WOLF']);
+    const service = deterministic();
+    service.start(room);
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'JOKER', 'Q', 'A']);
+
+    const turn = service.advancePhase(room.code).state;
+
+    expect(turn.abilityEffect).toMatchObject({ characterId: 'WOLF', abilityId: 'WOLF_TABLE_READ', type: 'ROUND_READ' });
+    expect(turn.abilityEffect?.message).toContain('3 张目标牌或 Joker');
+    expect(service.getView(room.code, 'p2').abilityEffect).toBeNull();
+  });
+
+  it('runs the fox hand-hint ability once per match', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['FOX']);
+    const service = deterministic();
+    service.start(room);
+    service.debugSetHand(room.code, 'p1', ['K', 'Q', 'K', 'Q', 'K']);
+
+    const turn = service.advancePhase(room.code).state;
+
+    expect(turn.abilityEffect).toMatchObject({ characterId: 'FOX', abilityId: 'FOX_HAND_HINT', type: 'HAND_HINT' });
+    expect(turn.abilityEffect?.message).toContain('目标牌不足');
+  });
+
+  it('extends the bear opening turn without changing rule state', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['BEAR']);
+    const service = deterministic();
+
+    const turn = startTurn(service, room);
+
+    expect((turn.phaseEndsAt ?? 0) - turn.phaseStartedAt).toBe(17_000);
+    expect(turn.abilityEffect).toMatchObject({ characterId: 'BEAR', abilityId: 'BEAR_OPENING_NERVE', type: 'TURN_TIME_EXTENDED', extraSeconds: 2 });
+    expect(turn.discardCount).toBe(0);
+  });
+
+  it('extends the rabbit first own turn once per match', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['RABBIT']);
+    const service = deterministic();
+
+    const turn = startTurn(service, room);
+
+    expect((turn.phaseEndsAt ?? 0) - turn.phaseStartedAt).toBe(18_000);
+    expect(turn.abilityEffect).toMatchObject({ characterId: 'RABBIT', abilityId: 'RABBIT_QUICK_STEP', type: 'TURN_TIME_EXTENDED', extraSeconds: 3 });
+  });
+
+  it('keeps the cat risk hint private at round start', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['CAT']);
+    const service = deterministic();
+
+    const round = service.start(room);
+
+    expect(round.abilityEffect).toMatchObject({ characterId: 'CAT', abilityId: 'CAT_NIGHT_EYE', type: 'RISK_HINT', riskLevel: 'HIGH' });
+    expect(service.getView(room.code, 'p2').abilityEffect).toBeNull();
+  });
+
+  it('lets the raccoon find one extra low-risk item only when both switches are enabled', () => {
+    const enabledRoom = makeRoom(2, 'ABC234', makeV7({ itemsEnabled: true, characterAbilitiesEnabled: true }), ['RACCOON']);
+    const enabledService = deterministic();
+    const enabled = enabledService.start(enabledRoom);
+
+    expect(enabled.items).toHaveLength(2);
+    expect(enabled.abilityEffect).toMatchObject({ characterId: 'RACCOON', abilityId: 'RACCOON_POCKET_FIND', type: 'ITEM_GRANTED', grantedItem: 'SPYGLASS' });
+
+    const disabledRoom = makeRoom(2, 'DEF234', makeV7({ characterAbilitiesEnabled: true }), ['RACCOON']);
+    const disabledService = deterministic();
+    const disabled = disabledService.start(disabledRoom);
+
+    expect(disabled.items).toEqual([]);
+    expect(disabled.abilityEffect).toMatchObject({ characterId: 'RACCOON', abilityId: 'RACCOON_POCKET_FIND', type: 'ITEM_SKIPPED' });
+  });
+
+  it('extends the frog forced-challenge turn once per match', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), [null, 'FROG']);
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A']);
+
+    service.playCards(room.code, 'p1', [0]);
+    const frog = service.getView(room.code, 'p2');
+
+    expect(frog.mustChallenge).toBe(true);
+    expect((frog.phaseEndsAt ?? 0) - frog.phaseStartedAt).toBe(19_000);
+    expect(frog.abilityEffect).toMatchObject({ characterId: 'FROG', abilityId: 'FROG_STEADY_BREATH', type: 'FORCED_CHALLENGE_TIME', extraSeconds: 4 });
+  });
+
+  it('gives the panda a private reveal memory after verdict', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), [null, 'PANDA']);
+    const service = deterministic();
+    forceChallenge(service, room, ['A', 'K']);
+
+    advanceTo(service, room.code, 'VERDICT');
+    const panda = service.getView(room.code, 'p2');
+
+    expect(panda.abilityEffect).toMatchObject({ characterId: 'PANDA', abilityId: 'PANDA_REVEAL_MEMORY', type: 'REVEAL_MEMORY' });
+    expect(panda.abilityEffect?.message).toContain('目标/Joker 1 张，非目标 1 张');
   });
 
   it('keeps V7 item inventory and effects private', () => {

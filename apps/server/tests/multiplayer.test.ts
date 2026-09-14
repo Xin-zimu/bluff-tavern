@@ -16,7 +16,7 @@ function connect(url: string) {
   });
 }
 
-function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'game:start' | 'game:playCards' | 'game:challenge' | 'game:useItem' | 'session:resume', payload: object) {
+function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'room:selectCharacter' | 'game:start' | 'game:playCards' | 'game:challenge' | 'game:useItem' | 'session:resume', payload: object) {
   return new Promise<Ack<T>>((resolve) => client.emit(event, payload as never, resolve as never));
 }
 
@@ -158,6 +158,46 @@ describe('real Socket.IO multiplayer', () => {
       expect(used).toMatchObject({ ok: true, data: { items: [] } });
       if (!used.ok) throw new Error('Item use failed');
       expect(used.data.itemEffect?.itemId).toBe(item);
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('starts a V7 character ability through the real Socket.IO flow', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'Host' });
+      if (!created.ok) throw new Error(created.error.message);
+      const guest = await connect(url);
+      const joined = await emitAck<RoomMembership>(guest, 'room:join', { nickname: 'Guest', roomCode: created.data.room.code });
+      if (!joined.ok) throw new Error(joined.error.message);
+
+      const selected = await emitAck<RoomView>(host, 'room:selectCharacter', { roomCode: created.data.room.code, characterId: 'CAT' });
+      expect(selected.ok).toBe(true);
+      if (!selected.ok) throw new Error(selected.error.message);
+      expect(selected.data.players.find((player) => player.id === created.data.playerId)).toMatchObject({ characterId: 'CAT' });
+      const settings = await emitAck<RoomView>(host, 'room:updateSettings', {
+        roomCode: created.data.room.code,
+        maxPlayers: 2,
+        gameMode: 'CLASSIC',
+        v7: { characterAbilitiesEnabled: true },
+        requestId: randomUUID(),
+      });
+      expect(settings).toMatchObject({ ok: true, data: { settings: { v7: { characterAbilitiesEnabled: true } } } });
+      await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
+        roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
+      })));
+
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+
+      expect(started).toMatchObject({ ok: true, data: { abilityEffect: { characterId: 'CAT', abilityId: 'CAT_NIGHT_EYE', type: 'RISK_HINT' } } });
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;

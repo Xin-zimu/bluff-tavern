@@ -1,4 +1,4 @@
-import type { CharacterId, ItemId } from '@bluff-tavern/shared';
+import type { CharacterAbilityId, CharacterId, ItemId } from '@bluff-tavern/shared';
 
 export const CHARACTER_IDS: CharacterId[] = ['WOLF', 'FOX', 'BEAR', 'RABBIT', 'CAT', 'RACCOON', 'FROG', 'PANDA'];
 
@@ -37,6 +37,17 @@ export const ITEM_NAMES: Record<ItemId, string> = {
   WAX_SEAL: '封口蜡印',
   TAVERN_MUG: '酒杯',
   POCKET_WATCH: '旧怀表',
+};
+
+export const CHARACTER_ABILITIES: Record<CharacterId, { id: CharacterAbilityId; title: string; description: string }> = {
+  WOLF: { id: 'WOLF_TABLE_READ', title: '牌桌嗅觉', description: '每轮自己的第一次回合获得公开局势和手牌目标数提示。' },
+  FOX: { id: 'FOX_HAND_HINT', title: '花言', description: '本局第一次自己的回合获得一次低风险出牌建议。' },
+  BEAR: { id: 'BEAR_OPENING_NERVE', title: '稳坐', description: '作为本轮先手时，自己的开局回合小幅延长。' },
+  RABBIT: { id: 'RABBIT_QUICK_STEP', title: '抢秒', description: '本局第一次自己的回合小幅延长。' },
+  CAT: { id: 'CAT_NIGHT_EYE', title: '夜眼', description: '每轮开始时获得下一次自己受罚的高低风险提示。' },
+  RACCOON: { id: 'RACCOON_POCKET_FIND', title: '摸袋', description: '若同时启用道具，开局额外摸到一件低风险道具。' },
+  FROG: { id: 'FROG_STEADY_BREATH', title: '沉息', description: '本局第一次被迫质疑时额外获得思考时间。' },
+  PANDA: { id: 'PANDA_REVEAL_MEMORY', title: '记牌', description: '每次揭牌结论时获得本次已公开牌面的记牌摘要。' },
 };
 
 export const ITEM_ART: Record<ItemId, string> = {

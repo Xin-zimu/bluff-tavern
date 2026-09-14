@@ -9,6 +9,24 @@ export type ItemId = 'SPYGLASS' | 'SWAP_GLOVE' | 'WAX_SEAL' | 'TAVERN_MUG' | 'PO
 export type ActiveItemId = Extract<ItemId, 'SPYGLASS' | 'TAVERN_MUG' | 'POCKET_WATCH'>;
 export type ItemEffectType = 'SPYGLASS_RISK' | 'POCKET_WATCH_EXTENDED' | 'TAVERN_MUG_TIPSY';
 export type ItemRiskLevel = 'LOW' | 'HIGH';
+export type CharacterAbilityId =
+  | 'WOLF_TABLE_READ'
+  | 'FOX_HAND_HINT'
+  | 'BEAR_OPENING_NERVE'
+  | 'RABBIT_QUICK_STEP'
+  | 'CAT_NIGHT_EYE'
+  | 'RACCOON_POCKET_FIND'
+  | 'FROG_STEADY_BREATH'
+  | 'PANDA_REVEAL_MEMORY';
+export type AbilityEffectType =
+  | 'ROUND_READ'
+  | 'HAND_HINT'
+  | 'TURN_TIME_EXTENDED'
+  | 'RISK_HINT'
+  | 'ITEM_GRANTED'
+  | 'ITEM_SKIPPED'
+  | 'FORCED_CHALLENGE_TIME'
+  | 'REVEAL_MEMORY';
 export type EmoteId = 'CHEER' | 'SUSPECT' | 'BLUFF' | 'LAUGH' | 'GASP' | 'NERVOUS' | 'TOAST' | 'GOOD_GAME';
 
 export interface V7ExtensionSettings {
@@ -149,6 +167,19 @@ export interface PrivateItemEffect {
   extraSeconds?: number;
 }
 
+export interface PrivateAbilityEffect {
+  abilityId: CharacterAbilityId;
+  characterId: CharacterId;
+  type: AbilityEffectType;
+  title: string;
+  message: string;
+  expiresAt: number | null;
+  riskLevel?: ItemRiskLevel;
+  extraSeconds?: number;
+  grantedItem?: ActiveItemId;
+  roundNumber?: number;
+}
+
 export interface GameSnapshot {
   sequence: number;
   serverNow: number;
@@ -180,6 +211,7 @@ export interface GameSnapshot {
   tavernEvent: PublicTavernEvent | null;
   items: ActiveItemId[];
   itemEffect: PrivateItemEffect | null;
+  abilityEffect: PrivateAbilityEffect | null;
   challengeResult: {
     challengerId: string;
     failedPlayerId: string;

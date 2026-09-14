@@ -4,10 +4,13 @@ import {
   V7_TAVERN_EVENT_TYPES,
   type ActiveItemId,
   type CardRank,
+  type CharacterAbilityId,
+  type CharacterId,
   type GameCue,
   type GameMode,
   type GamePhase,
   type GameSnapshot,
+  type PrivateAbilityEffect,
   type PrivateItemEffect,
   type PublicChallengeState,
   type PublicPunishmentState,
@@ -48,6 +51,7 @@ interface InternalGame {
   roundNumber: number;
   playerOrder: string[];
   playerNames: Map<string, string>;
+  playerCharacters: Map<string, CharacterId | null>;
   connectedPlayerIds: Set<string>;
   alivePlayerIds: Set<string>;
   hands: Map<string, CardRank[]>;
@@ -66,6 +70,8 @@ interface InternalGame {
   v7: V7ExtensionSettings;
   itemInventories: Map<string, ActiveItemId[]>;
   itemEffects: Map<string, PrivateItemEffect>;
+  abilityEffects: Map<string, PrivateAbilityEffect>;
+  abilityUsedKeys: Set<string>;
   tavernEvent: PublicTavernEvent | null;
   discardCount: number;
   startedAt: number;
@@ -98,6 +104,21 @@ const tavernEventPool = V7_TAVERN_EVENT_TYPES;
 const TAVERN_EVENT_CHANCE_PERCENT = 25;
 const POCKET_WATCH_EXTENSION_SECONDS = 7;
 const ITEM_EFFECT_DURATION_MS = 18_000;
+const ABILITY_EFFECT_DURATION_MS = 20_000;
+const BEAR_OPENING_EXTENSION_SECONDS = 2;
+const RABBIT_EXTENSION_SECONDS = 3;
+const FROG_CHALLENGE_EXTENSION_SECONDS = 4;
+
+const characterAbilities: Record<CharacterId, CharacterAbilityId> = {
+  WOLF: 'WOLF_TABLE_READ',
+  FOX: 'FOX_HAND_HINT',
+  BEAR: 'BEAR_OPENING_NERVE',
+  RABBIT: 'RABBIT_QUICK_STEP',
+  CAT: 'CAT_NIGHT_EYE',
+  RACCOON: 'RACCOON_POCKET_FIND',
+  FROG: 'FROG_STEADY_BREATH',
+  PANDA: 'PANDA_REVEAL_MEMORY',
+};
 
 const cinematicTiming = {
   ROUND_START: 2_700,
@@ -131,6 +152,7 @@ export class GameService {
       roundNumber: 0,
       playerOrder,
       playerNames: new Map(room.players.map((player) => [player.id, player.nickname])),
+      playerCharacters: new Map(room.players.map((player) => [player.id, player.characterId])),
       connectedPlayerIds: new Set(room.players.filter((player) => player.isConnected).map((player) => player.id)),
       alivePlayerIds: new Set(playerOrder),
       hands: new Map(playerOrder.map((playerId) => [playerId, []])),
@@ -149,6 +171,8 @@ export class GameService {
       v7,
       itemInventories: new Map(playerOrder.map((playerId) => [playerId, v7.itemsEnabled ? [this.dealItem()] : []])),
       itemEffects: new Map(),
+      abilityEffects: new Map(),
+      abilityUsedKeys: new Set(),
       tavernEvent: null,
       discardCount: 0,
       startedAt: Date.now(),
@@ -391,6 +415,7 @@ export class GameService {
       tavernEvent: game.v7.tavernEventsEnabled && game.tavernEvent ? { ...game.tavernEvent } : null,
       items: game.v7.itemsEnabled ? [...(game.itemInventories.get(viewerId) ?? [])] : [],
       itemEffect: game.v7.itemsEnabled ? this.getItemEffect(game, viewerId, now) : null,
+      abilityEffect: game.v7.characterAbilitiesEnabled ? this.getAbilityEffect(game, viewerId, now) : null,
       challengeResult,
     };
   }
@@ -458,6 +483,7 @@ export class GameService {
       game.hands.set(eliminatedPlayerId, []);
       game.itemInventories.set(eliminatedPlayerId, []);
       game.itemEffects.delete(eliminatedPlayerId);
+      game.abilityEffects.delete(eliminatedPlayerId);
       game.eliminationOrder.push(eliminatedPlayerId);
       if (game.alivePlayerIds.size === 1) game.winnerId = [...game.alivePlayerIds][0]!;
     }
@@ -482,6 +508,7 @@ export class GameService {
     game.phaseSequence += 1;
     game.phaseStartedAt = now;
     game.phaseEndsAt = durationMs === null ? null : now + durationMs;
+    this.applyPhaseAbilities(game, now);
   }
 
   private getPublicChallenge(game: InternalGame): PublicChallengeState | null {
@@ -512,6 +539,170 @@ export class GameService {
       wasBluff: pending.wasBluff,
       punishedPlayerId: pending.punishedPlayerId,
     };
+  }
+
+  private applyPhaseAbilities(game: InternalGame, now: number): void {
+    if (!game.v7.characterAbilitiesEnabled) return;
+    if (game.phase === 'ROUND_START') {
+      for (const playerId of game.playerOrder) {
+        if (game.alivePlayerIds.has(playerId)) this.applyRoundStartAbility(game, playerId, now);
+      }
+      return;
+    }
+    if (game.phase === 'TURN' && game.turnPlayerId) {
+      this.applyTurnStartAbility(game, game.turnPlayerId, now);
+      return;
+    }
+    if (game.phase === 'VERDICT') {
+      this.applyVerdictAbility(game, now);
+    }
+  }
+
+  private applyRoundStartAbility(game: InternalGame, playerId: string, now: number): void {
+    const characterId = game.playerCharacters.get(playerId);
+    if (!characterId) return;
+    const abilityId = characterAbilities[characterId];
+    if (abilityId === 'CAT_NIGHT_EYE' && this.takeAbilityUse(game, playerId, abilityId, `round:${game.roundNumber}`)) {
+      const riskLevel = this.revolverRiskLevel(game, playerId);
+      this.setAbilityEffect(game, playerId, {
+        abilityId,
+        characterId,
+        type: 'RISK_HINT',
+        title: '黑猫 · 夜眼',
+        riskLevel,
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: riskLevel === 'HIGH'
+          ? '夜眼：下一次轮到你受罚时风险偏高。'
+          : '夜眼：下一次轮到你受罚时风险偏低。',
+      });
+      return;
+    }
+    if (abilityId === 'RACCOON_POCKET_FIND' && this.takeAbilityUse(game, playerId, abilityId, 'match')) {
+      if (!game.v7.itemsEnabled) {
+        this.setAbilityEffect(game, playerId, {
+          abilityId,
+          characterId,
+          type: 'ITEM_SKIPPED',
+          title: '浣熊 · 摸袋',
+          roundNumber: game.roundNumber,
+          expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+          message: '摸袋：本局未启用道具，不会额外生成道具。',
+        });
+        return;
+      }
+      const item = this.dealItem();
+      const inventory = game.itemInventories.get(playerId) ?? [];
+      inventory.push(item);
+      game.itemInventories.set(playerId, inventory);
+      this.setAbilityEffect(game, playerId, {
+        abilityId,
+        characterId,
+        type: 'ITEM_GRANTED',
+        title: '浣熊 · 摸袋',
+        grantedItem: item,
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: `摸袋：你额外摸到 ${this.itemName(item)}。`,
+      });
+    }
+  }
+
+  private applyTurnStartAbility(game: InternalGame, playerId: string, now: number): void {
+    const characterId = game.playerCharacters.get(playerId);
+    if (!characterId) return;
+    const abilityId = characterAbilities[characterId];
+    if (abilityId === 'WOLF_TABLE_READ' && this.takeAbilityUse(game, playerId, abilityId, `round:${game.roundNumber}`)) {
+      const safeCards = this.safeHandCount(game, playerId);
+      const previous = game.lastPlay
+        ? `${this.playerName(game, game.lastPlay.playerId)} 刚声明 ${game.lastPlay.count} 张 ${game.targetRank}`
+        : '你是本轮先手';
+      this.setAbilityEffect(game, playerId, {
+        abilityId,
+        characterId,
+        type: 'ROUND_READ',
+        title: '灰狼 · 牌桌嗅觉',
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: `牌桌嗅觉：${previous}；你手里有 ${safeCards} 张目标牌或 Joker。`,
+      });
+      return;
+    }
+    if (abilityId === 'FOX_HAND_HINT' && this.takeAbilityUse(game, playerId, abilityId, 'match')) {
+      const safeCards = this.safeHandCount(game, playerId);
+      this.setAbilityEffect(game, playerId, {
+        abilityId,
+        characterId,
+        type: 'HAND_HINT',
+        title: '赤狐 · 花言',
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: `花言：${this.foxAdvice(safeCards)} 当前手里有 ${safeCards} 张目标牌或 Joker。`,
+      });
+      return;
+    }
+    if (abilityId === 'BEAR_OPENING_NERVE' && !game.lastPlay && this.takeAbilityUse(game, playerId, abilityId, `round:${game.roundNumber}`)) {
+      this.extendCurrentPhase(game, now, BEAR_OPENING_EXTENSION_SECONDS);
+      this.setAbilityEffect(game, playerId, {
+        abilityId,
+        characterId,
+        type: 'TURN_TIME_EXTENDED',
+        title: '棕熊 · 稳坐',
+        extraSeconds: BEAR_OPENING_EXTENSION_SECONDS,
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: `稳坐：本轮先手回合延长 ${BEAR_OPENING_EXTENSION_SECONDS} 秒。`,
+      });
+      return;
+    }
+    if (abilityId === 'RABBIT_QUICK_STEP' && this.takeAbilityUse(game, playerId, abilityId, 'match')) {
+      this.extendCurrentPhase(game, now, RABBIT_EXTENSION_SECONDS);
+      this.setAbilityEffect(game, playerId, {
+        abilityId,
+        characterId,
+        type: 'TURN_TIME_EXTENDED',
+        title: '白兔 · 抢秒',
+        extraSeconds: RABBIT_EXTENSION_SECONDS,
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: `抢秒：本局第一次自己的回合延长 ${RABBIT_EXTENSION_SECONDS} 秒。`,
+      });
+      return;
+    }
+    if (abilityId === 'FROG_STEADY_BREATH' && game.mustChallenge && this.takeAbilityUse(game, playerId, abilityId, 'match')) {
+      this.extendCurrentPhase(game, now, FROG_CHALLENGE_EXTENSION_SECONDS);
+      this.setAbilityEffect(game, playerId, {
+        abilityId,
+        characterId,
+        type: 'FORCED_CHALLENGE_TIME',
+        title: '青蛙 · 沉息',
+        extraSeconds: FROG_CHALLENGE_EXTENSION_SECONDS,
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: `沉息：被迫质疑时额外获得 ${FROG_CHALLENGE_EXTENSION_SECONDS} 秒。`,
+      });
+    }
+  }
+
+  private applyVerdictAbility(game: InternalGame, now: number): void {
+    const pending = game.pendingChallenge;
+    if (!pending) return;
+    for (const playerId of game.playerOrder) {
+      if (!game.alivePlayerIds.has(playerId)) continue;
+      const characterId = game.playerCharacters.get(playerId);
+      if (!characterId || characterAbilities[characterId] !== 'PANDA_REVEAL_MEMORY') continue;
+      const honestCards = pending.revealedCards.filter((card) => card === game.targetRank || card === 'JOKER').length;
+      const bluffCards = pending.revealedCards.length - honestCards;
+      this.setAbilityEffect(game, playerId, {
+        abilityId: 'PANDA_REVEAL_MEMORY',
+        characterId,
+        type: 'REVEAL_MEMORY',
+        title: '熊猫 · 记牌',
+        roundNumber: game.roundNumber,
+        expiresAt: now + ABILITY_EFFECT_DURATION_MS,
+        message: `记牌：本次揭示 ${pending.revealedCards.length} 张，目标/Joker ${honestCards} 张，非目标 ${bluffCards} 张。`,
+      });
+    }
   }
 
   private resolveItemEffect(game: InternalGame, playerId: string, itemId: ActiveItemId): PrivateItemEffect {
@@ -571,6 +762,59 @@ export class GameService {
       return null;
     }
     return { ...effect };
+  }
+
+  private getAbilityEffect(game: InternalGame, playerId: string, now: number): PrivateAbilityEffect | null {
+    const effect = game.abilityEffects.get(playerId);
+    if (!effect) return null;
+    if (effect.expiresAt !== null && effect.expiresAt <= now) {
+      game.abilityEffects.delete(playerId);
+      return null;
+    }
+    return { ...effect };
+  }
+
+  private setAbilityEffect(game: InternalGame, playerId: string, effect: PrivateAbilityEffect): void {
+    game.abilityEffects.set(playerId, effect);
+  }
+
+  private takeAbilityUse(game: InternalGame, playerId: string, abilityId: CharacterAbilityId, scope: string): boolean {
+    const key = `${playerId}:${abilityId}:${scope}`;
+    if (game.abilityUsedKeys.has(key)) return false;
+    game.abilityUsedKeys.add(key);
+    return true;
+  }
+
+  private extendCurrentPhase(game: InternalGame, now: number, seconds: number): void {
+    if (game.phaseEndsAt === null) return;
+    game.phaseEndsAt = Math.max(game.phaseEndsAt, now) + seconds * 1_000;
+  }
+
+  private safeHandCount(game: InternalGame, playerId: string): number {
+    const hand = game.hands.get(playerId) ?? [];
+    return hand.filter((card) => card === game.targetRank || card === 'JOKER').length;
+  }
+
+  private revolverRiskLevel(game: InternalGame, playerId: string): 'LOW' | 'HIGH' {
+    const revolver = game.revolvers.get(playerId);
+    if (!revolver) throw new RoomError('PLAYER_NOT_IN_GAME', '你不在本局游戏中');
+    return revolver.currentChamber === revolver.bulletPosition ? 'HIGH' : 'LOW';
+  }
+
+  private playerName(game: InternalGame, playerId: string): string {
+    return game.playerNames.get(playerId) ?? playerId;
+  }
+
+  private foxAdvice(safeCards: number): string {
+    if (safeCards >= 3) return '目标牌充足，可以考虑较大胆的声明。';
+    if (safeCards >= 1) return '手里有少量目标牌，适合小手数观察。';
+    return '目标牌不足，保守出牌或寻找质疑窗口更稳。';
+  }
+
+  private itemName(itemId: ActiveItemId): string {
+    if (itemId === 'SPYGLASS') return '望远镜';
+    if (itemId === 'POCKET_WATCH') return '旧怀表';
+    return '酒杯';
   }
 
   private drawTavernEvent(roundNumber: number, baseTurnDurationSeconds: number, enabled: boolean): PublicTavernEvent | null {

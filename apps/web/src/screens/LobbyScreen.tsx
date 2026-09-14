@@ -1,5 +1,5 @@
 import type { RoomView, V6GameMode, V7ExtensionSettings } from '@bluff-tavern/shared';
-import { CHARACTER_ART, CHARACTER_IDS } from '../art';
+import { CHARACTER_ABILITIES, CHARACTER_ART, CHARACTER_IDS } from '../art';
 
 const V7_FEATURE_SWITCHES: Array<{ key: keyof V7ExtensionSettings; label: string }> = [
   { key: 'itemsEnabled', label: '启用道具' },
@@ -80,9 +80,13 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
         const unavailable = room.players.some((player) => player.id !== playerId && player.characterId === character);
         return <button key={character} type="button" disabled={unavailable} className={selected ? 'selected' : ''} aria-pressed={selected} onClick={() => onSelectCharacter(character)}>
           <img src={CHARACTER_ART[character].image} alt="" loading="lazy" />
-          <span>{CHARACTER_ART[character].name}</span>
+          <span className="character-picker__copy">
+            <strong>{CHARACTER_ART[character].name}</strong>
+            <small>{CHARACTER_ABILITIES[character].title}</small>
+          </span>
         </button>;
       })}</div>}
+      {self?.characterId && <p className="ability-preview"><strong>{CHARACTER_ABILITIES[self.characterId].title}</strong>{CHARACTER_ABILITIES[self.characterId].description}</p>}
       {self && <button className={`button ${self.status === 'READY' ? 'button--secondary' : 'button--primary'}`} onClick={() => onReady(self.status !== 'READY')}>
         {self.status === 'READY' ? '取消准备' : '准备就绪'}
       </button>}

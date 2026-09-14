@@ -55,6 +55,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const syncedNow = clockRef.current.serverNow + (localNow - clockRef.current.localReceivedAt);
   const secondsLeft = game.phaseEndsAt ? Math.max(0, Math.ceil((game.phaseEndsAt - syncedNow) / 1_000)) : null;
   const activeItemEffect = game.itemEffect && (game.itemEffect.expiresAt === null || game.itemEffect.expiresAt > syncedNow) ? game.itemEffect : null;
+  const activeAbilityEffect = game.abilityEffect && (game.abilityEffect.expiresAt === null || game.abilityEffect.expiresAt > syncedNow) ? game.abilityEffect : null;
   const tipsy = activeItemEffect?.type === 'TAVERN_MUG_TIPSY';
   return <main className={`game-screen${eventClass}`}>
     <p className="rotate-hint">为获得最佳牌桌视野，请横屏游玩</p>
@@ -79,7 +80,8 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
     </section>
     {!isGameOver && <section className={`hand${tipsy ? ' hand--tipsy' : ''}`} aria-label="你的手牌">{game.hand.map((card, index) => <button key={`${card}-${index}`} className={`card card--${card.toLowerCase()} ${selected.includes(index) ? 'selected' : ''}`} aria-pressed={selected.includes(index)} onClick={() => toggle(index)} disabled={!canPlay}>{card === 'JOKER' ? <img src="/assets/cards/joker.png" alt="Joker" /> : <span>{card}</span>}</button>)}</section>}
     {!isGameOver && <button className="button button--primary button--art-start play-button" disabled={!canPlay || selected.length === 0} onClick={play}>出 {selected.length || ''} 张牌</button>}
-    {!isGameOver && (game.items.length > 0 || activeItemEffect) && <div className="item-dock">
+    {!isGameOver && (game.items.length > 0 || activeItemEffect || activeAbilityEffect) && <div className="item-dock">
+      {activeAbilityEffect && <p className={`ability-effect ability-effect--${activeAbilityEffect.riskLevel?.toLowerCase() ?? 'neutral'}`} aria-live="polite"><strong>{activeAbilityEffect.title}</strong>{activeAbilityEffect.message}</p>}
       {activeItemEffect && <p className={`item-effect item-effect--${activeItemEffect.riskLevel?.toLowerCase() ?? 'neutral'}`} aria-live="polite">{activeItemEffect.message}</p>}
       {game.items.length > 0 && <div className="item-bar" aria-label="可用道具">{game.items.map((item) => {
         const enabled = canUseItem(item, game, playerId);
