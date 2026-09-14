@@ -1,4 +1,4 @@
-const CACHE = 'bluff-tavern-v7.1-mode-core1';
+const CACHE = 'bluff-tavern-v7.1-mode-complete1';
 const APP_SHELL = '/';
 
 self.addEventListener('install', (event) => {
