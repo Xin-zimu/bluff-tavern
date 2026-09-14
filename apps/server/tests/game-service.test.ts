@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CardRank, CharacterId, PlayableGameMode, RoomView, V7ExtensionSettings } from '@bluff-tavern/shared';
 import { GameService } from '../src/game/game-service.js';
 
@@ -226,6 +226,7 @@ describe('V6 GameService rules', () => {
 
     service.playCards(room.code, 'p1', [0]);
     service.challenge(room.code, 'p2');
+    expect(service.getView(room.code, 'p2').sharedRevolver).toEqual({ chamberCount: 6, currentChamber: 0, shotsTaken: 0 });
     const hit = advanceTo(service, room.code, 'PUNISHMENT_RESULT');
 
     expect(hit.punishment).toMatchObject({ punishedPlayerId: 'p1', chamber: 0, hit: true, eliminatedPlayerId: 'p1' });
@@ -258,6 +259,7 @@ describe('V6 GameService rules', () => {
     const advanced = service.advancePhase(room.code).state;
 
     expect(advanced).toMatchObject({ phase: 'TURN', turnPlayerId: 'p2', freeChallenge: null });
+    expect(() => service.challenge(room.code, 'p2')).toThrow('质疑窗口已经关闭');
   });
 
   it('forces a Free Challenge timeout challenge when the previous player has no cards', () => {
@@ -273,6 +275,36 @@ describe('V6 GameService rules', () => {
     expect(result.cues).toMatchObject([{ type: 'CHALLENGE_CALLED', playerId: 'p2' }]);
   });
 
+  it('lets the server force a Free Challenge timeout challenge for a disconnected next player', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'FREE_CHALLENGE');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetHand(room.code, 'p1', ['A']);
+    service.playCards(room.code, 'p1', [0]);
+    service.updateConnections({ ...room, players: room.players.map((player) => player.id === 'p2' ? { ...player, isConnected: false } : player) });
+
+    const result = service.advancePhase(room.code);
+
+    expect(result.state).toMatchObject({ phase: 'CHALLENGE_CALLOUT', challenge: { challengerId: 'p2', challengedId: 'p1' } });
+  });
+
+  it('rejects Free Challenge requests that arrive after the server deadline', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000_000);
+      const room = makeRoom(3, 'ABC234', defaultV7, [], 'FREE_CHALLENGE');
+      const service = deterministic();
+      startTurn(service, room);
+      service.debugSetHand(room.code, 'p1', ['A', 'K']);
+      service.playCards(room.code, 'p1', [0]);
+      vi.setSystemTime(1_003_000);
+
+      expect(() => service.challenge(room.code, 'p2')).toThrow('质疑窗口已经关闭');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('hides other players hand counts during Party BLACKOUT only in public views', () => {
     const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
     const service = deterministic();
@@ -282,6 +314,7 @@ describe('V6 GameService rules', () => {
     const p1View = service.getView(room.code, 'p1');
     const p2View = service.getView(room.code, 'p2');
 
+    expect(p1View.tavernEvent).toMatchObject({ type: 'BLACKOUT' });
     expect(p1View.players.map((player) => [player.playerId, player.handCount])).toEqual([['p1', 5], ['p2', null], ['p3', null]]);
     expect(p2View.players.map((player) => [player.playerId, player.handCount])).toEqual([['p1', null], ['p2', 5], ['p3', null]]);
   });

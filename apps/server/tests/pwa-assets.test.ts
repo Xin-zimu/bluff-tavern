@@ -11,7 +11,7 @@ describe('V1.5 PWA assets', () => {
     expect(manifest.display).toBe('standalone');
     expect(manifest.icons[0]?.src).toBe('/icons/app-icon.svg');
     expect(worker).toContain("caches.open(CACHE)");
-    expect(worker).toContain('bluff-tavern-v7.1-mode-complete1');
+    expect(worker).toContain('bluff-tavern-v7.1.1-hotfix1');
     expect(worker).toContain("event.request.mode === 'navigate'");
     expect(worker).toContain("url.pathname.startsWith('/socket.io')");
     expect(icon).toContain('<svg');

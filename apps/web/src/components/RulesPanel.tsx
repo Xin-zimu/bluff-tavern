@@ -1,24 +1,23 @@
+import type { GameView } from '@bluff-tavern/shared';
+
 interface RulesPanelProps {
   open: boolean;
+  game: GameView;
   onClose: () => void;
 }
 
-const rules = [
-  ['目标牌', '每轮会公布一个目标牌，所有出牌声明都必须围绕这张牌。'],
+const baseRules: Array<[string, string]> = [
+  ['目标牌', '每轮会公布一个目标牌，所有出牌声明都围绕这张牌结算。'],
   ['出牌', '轮到你时选择 1 至 3 张手牌，实际牌面可以与声明不同。'],
-  ['质疑', '你可以质疑上一手。如果上一手有假牌，对方受罚；否则你受罚。'],
-  ['Joker', 'Joker 可视为任意目标牌，质疑时不会被判为假牌。'],
-  ['惩罚', '失败者触发轮盘惩罚，命中则淘汰，空枪则继续。'],
+  ['质疑', '质疑成功则上一手出牌者受罚；质疑失败则质疑者受罚。'],
+  ['Joker', '通常 Joker 视为当前目标牌；若本轮事件明确禁用 Joker，则按事件规则结算。'],
+  ['惩罚', '失败者触发左轮惩罚，命中淘汰，空枪继续。'],
   ['胜利', '只剩最后一名存活玩家时，本局结束。'],
-  ['扩展开关', '大厅中的道具、酒馆事件、角色能力默认关闭，由房主单独开启。'],
-  ['加注模式', '上一手出几张，下一手至少也要出几张；手牌不足时必须质疑。'],
-  ['道具', '第一批道具只提供风险提示、回合延时或私有界面干扰，不改变核心判定。'],
-  ['酒馆事件', '每轮开始可能触发公开事件，快速夜会缩短回合，其他事件先只影响演出。'],
-  ['角色能力', '每个角色有一个轻量能力，效果由服务端结算，只显示给相关玩家。'],
-] as const;
+];
 
-export function RulesPanel({ open, onClose }: RulesPanelProps) {
+export function RulesPanel({ open, game, onClose }: RulesPanelProps) {
   if (!open) return null;
+  const rules = [...baseRules, ...modeRules(game), ...eventRules(game)];
 
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rules-title">
     <section className="rules-panel">
@@ -30,11 +29,49 @@ export function RulesPanel({ open, onClose }: RulesPanelProps) {
         <button type="button" className="icon-close" onClick={onClose} aria-label="关闭规则">×</button>
       </div>
       <ol className="rules-grid">
-        {rules.map(([title, body]) => <li key={title}>
+        {rules.map(([title, body]) => <li key={`${title}:${body}`}>
           <strong>{title}</strong>
           <p>{body}</p>
         </li>)}
       </ol>
     </section>
   </div>;
+}
+
+function modeRules(game: GameView): Array<[string, string]> {
+  switch (game.gameMode) {
+    case 'QUICK':
+      return [['快速模式', '每名玩家只有 7 秒行动时间，超时由服务器自动执行合法操作。']];
+    case 'ESCALATION':
+      return [['加注模式', '本次出牌数量不能少于上一手；手牌不足以跟上时必须质疑。']];
+    case 'SHARED_REVOLVER':
+      return [['死亡左轮', '全桌共用一把左轮，空膛进度会保留；命中淘汰后重新装填并旋转。']];
+    case 'FREE_CHALLENGE':
+      return [['全民质疑', '出牌后开启 3 秒质疑窗口，除出牌者外的存活玩家都能抢先质疑；窗口结束后下一名玩家只能继续出牌。']];
+    case 'PARTY':
+      return [['酒馆乱斗', '每轮开始抽取一个公开事件，事件只影响当前轮，下一轮重新抽取。']];
+    case 'CLASSIC':
+      return [['经典模式', '只有下一名玩家可以在自己的回合质疑上一手。']];
+  }
+}
+
+function eventRules(game: GameView): Array<[string, string]> {
+  switch (game.tavernEvent?.type) {
+    case 'BLACKOUT':
+      return [['漆黑之夜', '本轮你只能看到自己的准确手牌数量，其他玩家手牌数量显示为问号。']];
+    case 'DRUNKEN':
+      return [['醉酒之夜', '本轮出牌方向反转，下一玩家、强制质疑和下一轮起手都按反方向计算。']];
+    case 'RAPID_NIGHT':
+      return [['快速夜', '本轮所有玩家行动时间缩短。']];
+    case 'DOUBLE_DANGER':
+      return [['双倍危机', '本轮质疑失败者最多连续接受两次左轮判定；第一枪命中时第二枪取消。']];
+    case 'NO_JOKER':
+      return [['禁忌小丑', '本轮 Joker 不再视为目标牌；仍可打出，但质疑时会被判为假牌。']];
+    case 'FORCED_BET':
+      return [['强制豪赌', '本轮首手可出 1 至 3 张；从第二手开始每次至少出 2 张，手牌不足时必须质疑。']];
+    case 'CANDLE_FLICKER':
+      return [['烛火摇曳', '本轮揭牌演出更紧张，核心判定不变。']];
+    default:
+      return [];
+  }
 }

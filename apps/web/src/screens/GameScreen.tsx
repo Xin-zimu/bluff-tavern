@@ -26,7 +26,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const canPlay = isTurn && !game.mustChallenge;
   const canSubmitPlay = canPlay && selected.length >= game.minimumPlayCount;
   const canFreeChallenge = game.phase === 'CHALLENGE_WINDOW' && game.lastPlay !== null && playerId !== null && game.alivePlayerIds.includes(playerId) && game.lastPlay.playerId !== playerId;
-  const canChallenge = (isTurn && game.lastPlay !== null) || canFreeChallenge;
+  const canChallenge = (isTurn && game.lastPlay !== null && game.gameMode !== 'FREE_CHALLENGE') || canFreeChallenge;
   const isGameOver = game.phase === 'GAME_OVER';
   const eventClass = game.tavernEvent ? ` game-screen--event-${game.tavernEvent.type.toLowerCase().replace('_', '-')}` : '';
   const modeCopy = `${GAME_MODE_NAMES[game.gameMode]} ${game.turnDurationSeconds} 秒`;
@@ -119,7 +119,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
     {game.punishment && <p className="future-note">轮盘第 {game.punishment.chamber + 1} 弹巢：{game.punishment.hit ? '中弹淘汰' : '空枪，继续游戏'}。</p>}
     <CinematicLayer room={room} game={game} now={syncedNow} />
     {room.players.some((player) => !player.isConnected) && <div className="reconnect-overlay" aria-live="polite">有玩家暂时离线，对局状态会在重连后恢复。</div>}
-    <RulesPanel open={rulesOpen} onClose={() => setRulesOpen(false)} />
+    <RulesPanel open={rulesOpen} game={game} onClose={() => setRulesOpen(false)} />
     {game.phase === 'GAME_OVER' && <section className="victory-panel" aria-label="本局结果">
       <img className="victory-particles" src="/assets/effects/victory_particles.png" alt="" aria-hidden="true" />
       <p className="eyebrow">酒馆最终胜者</p>

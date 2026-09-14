@@ -1,6 +1,6 @@
 # 诡牌酒馆 / Bluff Tavern
 
-手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V7.1**：保留 2–8 人服务器权威诈唬核心循环和 V7.0 已有扩展，并新增多模式基础与首个玩法模式“加注模式”。
+手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V7.1.1**：保留 2–8 人服务器权威诈唬核心循环和 V7.0 已有扩展，并开放 Classic、Quick、Escalation、Shared Revolver、Free Challenge 与 Party 模式。
 
 ## 技术栈
 
@@ -32,7 +32,7 @@ pnpm test
 pnpm build
 ```
 
-真实多人联机测试在 `apps/server/tests/multiplayer.test.ts`，会启动临时服务并连接真实 Socket.IO 客户端，覆盖 8 人开局、断线恢复、三客户端 phaseSequence 同步、惩罚结果延迟公开，以及 V7 道具、角色能力和 V7.1 加注模式链路。运行中的开发服务还可执行 `pnpm --filter @bluff-tavern/server exec tsx scripts/live-reconnect-v1.0.ts`，通过 Vite 的 Socket.IO 反代验证游戏内断线后恢复同一座位。
+真实多人联机测试在 `apps/server/tests/multiplayer.test.ts`，会启动临时服务并连接真实 Socket.IO 客户端，覆盖 8 人开局、断线恢复、三客户端 phaseSequence 同步、惩罚结果延迟公开，以及 V7 道具、角色能力和 V7.1 模式链路。运行中的开发服务还可执行 `pnpm --filter @bluff-tavern/server exec tsx scripts/live-reconnect-v1.0.ts`，通过 Vite 的 Socket.IO 反代验证游戏内断线后恢复同一座位。
 
 ## 目录
 
@@ -50,7 +50,7 @@ docs/                     架构、协议与验收记录
 
 - 状态仅在内存中；服务重启会清空房间。
 - 牌局或结算阶段的意外断线会保留座位；浏览器用本地 `sessionToken` 在重新打开、网络恢复或从后台回到前台后恢复同一玩家身份。Token 只存浏览器本机、不写日志、不会出现在公开房间状态中。
-- Classic、Quick 和 Escalation 是当前可开局模式；Party、Free Challenge、Shared Revolver 和 Custom 仍是后续计划模式。
+- Classic、Quick、Escalation、Shared Revolver、Free Challenge 和 Party 是当前可开局模式；Custom 仍是后续计划模式。
 - V7 扩展开关默认关闭，可单独启用道具、酒馆事件或角色能力；当前能力系统保留，但 V7.1 主线优先扩展玩法模式。
 - 道具首批只开放望远镜、旧怀表、酒杯；角色能力首批只做私有提示、轻量延时和道具协同；换别人牌、偷看别人牌、经济系统和复杂社交仍不做。
 - 房主离开后会转移给最早入席的剩余玩家；修改最大人数会取消所有人的准备状态。

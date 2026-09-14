@@ -39,6 +39,7 @@ interface PendingChallenge {
   wasBluff: boolean;
   punishedPlayerId: string;
   shots: Array<{ chamber: number; hit: boolean }>;
+  maxShots: number;
   publishedShotCount: number;
   resultPublished: boolean;
 }
@@ -257,21 +258,28 @@ export class GameService {
     if (game.gameMode === 'FREE_CHALLENGE' && game.pendingChallenge && game.pendingChallenge.challengedId === game.lastPlay?.playerId) {
       throw new RoomError('CHALLENGE_ALREADY_TAKEN', '已经有玩家抢先质疑');
     }
-    if (game.phase === 'CHALLENGE_WINDOW') this.requireFreeChallenge(game, challengerId);
-    else this.requireTurn(game, challengerId);
-    if (!game.lastPlay) throw new RoomError('NO_PLAY_TO_CHALLENGE', '当前没有可质疑的上一手');
+    if (game.gameMode === 'FREE_CHALLENGE') {
+      if (game.phase !== 'CHALLENGE_WINDOW') throw new RoomError('CHALLENGE_WINDOW_CLOSED', '质疑窗口已经关闭');
+      this.requireFreeChallenge(game, challengerId);
+    } else {
+      this.requireTurn(game, challengerId);
+    }
+    return this.acceptChallenge(game, roomCode, challengerId);
+  }
 
+  private acceptChallenge(game: InternalGame, roomCode: string, challengerId: string): ChallengeResult {
+    if (!game.lastPlay) throw new RoomError('NO_PLAY_TO_CHALLENGE', '当前没有可质疑的上一手');
     if (game.freeChallengeWindow) game.freeChallengeWindow.challengerId = challengerId;
     const wasBluff = game.lastPlay.cards.some((card) => !this.isTruthCard(game, card));
     const punishedPlayerId = wasBluff ? game.lastPlay.playerId : challengerId;
-    const shots = this.resolvePunishmentShots(game, punishedPlayerId);
     game.pendingChallenge = {
       challengerId,
       challengedId: game.lastPlay.playerId,
       revealedCards: [...game.lastPlay.cards],
       wasBluff,
       punishedPlayerId,
-      shots,
+      shots: [],
+      maxShots: this.maxPunishmentShots(game),
       publishedShotCount: 0,
       resultPublished: false,
     };
@@ -315,7 +323,7 @@ export class GameService {
     if ((game.hands.get(lastPlay.playerId)?.length ?? 0) === 0) {
       const challengerId = this.nextAlivePlayerId(game, lastPlay.playerId);
       if (!challengerId) throw new RoomError('NO_CHALLENGER_AVAILABLE', '当前没有可质疑的玩家');
-      return this.challenge(roomCode, challengerId);
+      return this.acceptChallenge(game, roomCode, challengerId);
     }
     game.freeChallengeWindow = null;
     const nextPlayerId = this.nextAlivePlayerId(game, lastPlay.playerId);
@@ -474,7 +482,7 @@ export class GameService {
       alivePlayerIds: [...game.alivePlayerIds],
       winnerId: game.winnerId,
       summary,
-      tavernEvent: game.v7.tavernEventsEnabled && game.tavernEvent ? { ...game.tavernEvent } : null,
+      tavernEvent: this.shouldPublishTavernEvent(game) && game.tavernEvent ? { ...game.tavernEvent } : null,
       items: game.v7.itemsEnabled ? [...(game.itemInventories.get(viewerId) ?? [])] : [],
       itemEffect: game.v7.itemsEnabled ? this.getItemEffect(game, viewerId, now) : null,
       abilityEffect: game.v7.characterAbilitiesEnabled ? this.getAbilityEffect(game, viewerId, now) : null,
@@ -555,10 +563,9 @@ export class GameService {
     if (!pending) throw new RoomError('PUNISHMENT_NOT_ALLOWED', '当前没有惩罚结果');
     if (pending.resultPublished) return { eliminatedPlayerId: game.punishment?.eliminatedPlayerId ?? null };
 
-    const shot = pending.shots[pending.publishedShotCount];
-    if (!shot) throw new RoomError('PUNISHMENT_NOT_ALLOWED', '当前没有可发布的惩罚枪次');
+    const shot = this.commitPunishmentShot(game, pending);
     pending.publishedShotCount += 1;
-    const totalShots = pending.shots.length;
+    const totalShots = shot.hit ? pending.publishedShotCount : pending.maxShots;
     const eliminatedPlayerId = shot.hit ? pending.punishedPlayerId : null;
     if (eliminatedPlayerId) {
       game.alivePlayerIds.delete(eliminatedPlayerId);
@@ -595,7 +602,7 @@ export class GameService {
     const pending = game.pendingChallenge;
     if (!pending || pending.resultPublished) return false;
     if (game.punishment?.hit) return false;
-    return pending.publishedShotCount < pending.shots.length;
+    return pending.publishedShotCount < pending.maxShots;
   }
 
   private enterPhase(game: InternalGame, phase: GamePhase, durationMs: number | null): void {
@@ -999,7 +1006,7 @@ export class GameService {
         return {
           type,
           title: '强制豪赌',
-          description: '本轮每次出牌至少 2 张。',
+          description: '本轮首手可出 1–3 张；从第二手开始每次至少出 2 张，手牌不足时必须质疑。',
           roundNumber,
           turnDurationSeconds: null,
           intensity: 'HIGH',
@@ -1019,6 +1026,7 @@ export class GameService {
 
   private requireFreeChallenge(game: InternalGame, playerId: string): void {
     if (!game.lastPlay || !game.freeChallengeWindow) throw new RoomError('NO_PLAY_TO_CHALLENGE', '当前没有可质疑的上一手');
+    if (Date.now() >= game.freeChallengeWindow.endsAt) throw new RoomError('CHALLENGE_WINDOW_CLOSED', '质疑窗口已经关闭');
     if (game.freeChallengeWindow.challengerId) throw new RoomError('CHALLENGE_ALREADY_TAKEN', '已经有玩家抢先质疑');
     if (!game.alivePlayerIds.has(playerId)) throw new RoomError('PLAYER_ELIMINATED', '已淘汰玩家不能质疑');
     if (!game.connectedPlayerIds.has(playerId)) throw new RoomError('PLAYER_DISCONNECTED', '离线玩家不能质疑');
@@ -1113,12 +1121,14 @@ export class GameService {
     return { chamber, hit };
   }
 
-  private resolvePunishmentShots(game: InternalGame, playerId: string): Array<{ chamber: number; hit: boolean }> {
-    const shots = [this.resolveRevolverShot(game, playerId)];
-    if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'DOUBLE_DANGER' && !shots[0]!.hit) {
-      shots.push(this.resolveRevolverShot(game, playerId));
-    }
-    return shots;
+  private commitPunishmentShot(game: InternalGame, pending: PendingChallenge): { chamber: number; hit: boolean } {
+    const shot = this.resolveRevolverShot(game, pending.punishedPlayerId);
+    pending.shots.push(shot);
+    return shot;
+  }
+
+  private maxPunishmentShots(game: InternalGame): number {
+    return game.gameMode === 'PARTY' && game.tavernEvent?.type === 'DOUBLE_DANGER' ? 2 : 1;
   }
 
   private isTruthCard(game: InternalGame, card: CardRank): boolean {
@@ -1131,6 +1141,10 @@ export class GameService {
     return game.gameMode === 'PARTY'
       && game.tavernEvent?.type === 'BLACKOUT'
       && viewerId !== playerId;
+  }
+
+  private shouldPublishTavernEvent(game: InternalGame): boolean {
+    return game.gameMode === 'PARTY' || game.v7.tavernEventsEnabled;
   }
 
   private getPublicSharedRevolver(game: InternalGame): PublicSharedRevolverState | null {
