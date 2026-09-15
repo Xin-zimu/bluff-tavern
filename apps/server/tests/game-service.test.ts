@@ -477,6 +477,20 @@ describe('V6 GameService rules', () => {
     expect(service.getView(room.code, 'p2').abilityEffect).toBeNull();
   });
 
+  it('counts Joker as unsafe for the wolf table-read ability during Party NO_JOKER', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['WOLF'], 'PARTY');
+    const service = deterministic();
+    service.start(room);
+    service.debugSetTavernEvent(room.code, 'NO_JOKER');
+    service.debugSetHand(room.code, 'p1', ['A', 'JOKER', 'JOKER', 'Q', 'K']);
+
+    const turn = service.advancePhase(room.code).state;
+
+    expect(turn.abilityEffect).toMatchObject({ characterId: 'WOLF', abilityId: 'WOLF_TABLE_READ', type: 'ROUND_READ' });
+    expect(turn.abilityEffect?.message).toContain('1 张目标牌');
+    expect(turn.abilityEffect?.message).not.toContain('Joker');
+  });
+
   it('runs the fox hand-hint ability once per match', () => {
     const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['FOX']);
     const service = deterministic();
@@ -487,6 +501,21 @@ describe('V6 GameService rules', () => {
 
     expect(turn.abilityEffect).toMatchObject({ characterId: 'FOX', abilityId: 'FOX_HAND_HINT', type: 'HAND_HINT' });
     expect(turn.abilityEffect?.message).toContain('目标牌不足');
+  });
+
+  it('counts Joker as unsafe for the fox hand-hint ability during Party NO_JOKER', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), ['FOX'], 'PARTY');
+    const service = deterministic();
+    service.start(room);
+    service.debugSetTavernEvent(room.code, 'NO_JOKER');
+    service.debugSetHand(room.code, 'p1', ['JOKER', 'JOKER', 'K', 'Q', 'K']);
+
+    const turn = service.advancePhase(room.code).state;
+
+    expect(turn.abilityEffect).toMatchObject({ characterId: 'FOX', abilityId: 'FOX_HAND_HINT', type: 'HAND_HINT' });
+    expect(turn.abilityEffect?.message).toContain('目标牌不足');
+    expect(turn.abilityEffect?.message).toContain('0 张目标牌');
+    expect(turn.abilityEffect?.message).not.toContain('Joker');
   });
 
   it('extends the bear opening turn without changing rule state', () => {
@@ -560,6 +589,25 @@ describe('V6 GameService rules', () => {
 
     expect(panda.abilityEffect).toMatchObject({ characterId: 'PANDA', abilityId: 'PANDA_REVEAL_MEMORY', type: 'REVEAL_MEMORY' });
     expect(panda.abilityEffect?.message).toContain('目标/Joker 1 张，非目标 1 张');
+  });
+
+  it('counts Joker as bluff for panda reveal memory during Party NO_JOKER', () => {
+    const room = makeRoom(2, 'ABC234', makeV7({ characterAbilitiesEnabled: true }), [null, 'PANDA'], 'PARTY');
+    const service = deterministic();
+    service.start(room);
+    service.debugSetTavernEvent(room.code, 'NO_JOKER');
+    service.advancePhase(room.code);
+    service.debugSetHand(room.code, 'p1', ['JOKER', 'A']);
+
+    service.playCards(room.code, 'p1', [0, 1]);
+    service.challenge(room.code, 'p2');
+    const verdict = advanceTo(service, room.code, 'VERDICT');
+    const panda = service.getView(room.code, 'p2');
+
+    expect(verdict.challenge).toMatchObject({ wasBluff: true, punishedPlayerId: 'p1' });
+    expect(panda.abilityEffect).toMatchObject({ characterId: 'PANDA', abilityId: 'PANDA_REVEAL_MEMORY', type: 'REVEAL_MEMORY' });
+    expect(panda.abilityEffect?.message).toContain('目标牌 1 张，非目标 1 张');
+    expect(panda.abilityEffect?.message).not.toContain('Joker');
   });
 
   it('keeps V7 item inventory and effects private', () => {

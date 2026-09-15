@@ -738,7 +738,7 @@ export class GameService {
         title: '灰狼 · 牌桌嗅觉',
         roundNumber: game.roundNumber,
         expiresAt: now + ABILITY_EFFECT_DURATION_MS,
-        message: `牌桌嗅觉：${previous}；你手里有 ${safeCards} 张目标牌或 Joker。`,
+        message: `牌桌嗅觉：${previous}；你手里有 ${safeCards} 张${this.truthCardHintLabel(game)}。`,
       });
       return;
     }
@@ -751,7 +751,7 @@ export class GameService {
         title: '赤狐 · 花言',
         roundNumber: game.roundNumber,
         expiresAt: now + ABILITY_EFFECT_DURATION_MS,
-        message: `花言：${this.foxAdvice(safeCards)} 当前手里有 ${safeCards} 张目标牌或 Joker。`,
+        message: `花言：${this.foxAdvice(safeCards)} 当前手里有 ${safeCards} 张${this.truthCardHintLabel(game)}。`,
       });
       return;
     }
@@ -805,7 +805,7 @@ export class GameService {
       if (!game.alivePlayerIds.has(playerId)) continue;
       const characterId = game.playerCharacters.get(playerId);
       if (!characterId || characterAbilities[characterId] !== 'PANDA_REVEAL_MEMORY') continue;
-      const honestCards = pending.revealedCards.filter((card) => card === game.targetRank || card === 'JOKER').length;
+      const honestCards = pending.revealedCards.filter((card) => this.isTruthCard(game, card)).length;
       const bluffCards = pending.revealedCards.length - honestCards;
       this.setAbilityEffect(game, playerId, {
         abilityId: 'PANDA_REVEAL_MEMORY',
@@ -814,7 +814,7 @@ export class GameService {
         title: '熊猫 · 记牌',
         roundNumber: game.roundNumber,
         expiresAt: now + ABILITY_EFFECT_DURATION_MS,
-        message: `记牌：本次揭示 ${pending.revealedCards.length} 张，目标/Joker ${honestCards} 张，非目标 ${bluffCards} 张。`,
+        message: `记牌：本次揭示 ${pending.revealedCards.length} 张，${this.truthCardMemoryLabel(game)} ${honestCards} 张，非目标 ${bluffCards} 张。`,
       });
     }
   }
@@ -906,7 +906,7 @@ export class GameService {
 
   private safeHandCount(game: InternalGame, playerId: string): number {
     const hand = game.hands.get(playerId) ?? [];
-    return hand.filter((card) => card === game.targetRank || card === 'JOKER').length;
+    return hand.filter((card) => this.isTruthCard(game, card)).length;
   }
 
   private revolverRiskLevel(game: InternalGame, playerId: string): 'LOW' | 'HIGH' {
@@ -923,6 +923,14 @@ export class GameService {
     if (safeCards >= 3) return '目标牌充足，可以考虑较大胆的声明。';
     if (safeCards >= 1) return '手里有少量目标牌，适合小手数观察。';
     return '目标牌不足，保守出牌或寻找质疑窗口更稳。';
+  }
+
+  private truthCardHintLabel(game: InternalGame): string {
+    return game.tavernEvent?.type === 'NO_JOKER' ? '目标牌' : '目标牌或 Joker';
+  }
+
+  private truthCardMemoryLabel(game: InternalGame): string {
+    return game.tavernEvent?.type === 'NO_JOKER' ? '目标牌' : '目标/Joker';
   }
 
   private itemName(itemId: ActiveItemId): string {
@@ -988,7 +996,7 @@ export class GameService {
         return {
           type,
           title: '双倍危机',
-          description: '本轮质疑失败者连续接受两次左轮判定。',
+          description: '本轮受罚者最多连续接受两次左轮判定；第一枪命中时第二枪取消。',
           roundNumber,
           turnDurationSeconds: null,
           intensity: 'HIGH',

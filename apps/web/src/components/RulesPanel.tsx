@@ -64,7 +64,7 @@ function eventRules(game: GameView): Array<[string, string]> {
     case 'RAPID_NIGHT':
       return [['快速夜', '本轮所有玩家行动时间缩短。']];
     case 'DOUBLE_DANGER':
-      return [['双倍危机', '本轮质疑失败者最多连续接受两次左轮判定；第一枪命中时第二枪取消。']];
+      return [['双倍危机', '本轮受罚者最多连续接受两次左轮判定；第一枪命中时第二枪取消。']];
     case 'NO_JOKER':
       return [['禁忌小丑', '本轮 Joker 不再视为目标牌；仍可打出，但质疑时会被判为假牌。']];
     case 'FORCED_BET':
