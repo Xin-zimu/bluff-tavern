@@ -1,4 +1,4 @@
-const CACHE = 'bluff-tavern-v7.1.3-experience-fixes1';
+const CACHE = 'bluff-tavern-v7.1.4-reveal-handoff1';
 const APP_SHELL = '/';
 
 self.addEventListener('install', (event) => {

@@ -1,5 +1,5 @@
 export const ROOM_CODE_LENGTH = 6;
-export const APP_VERSION = '7.1.3';
+export const APP_VERSION = '7.1.4';
 export const ROOM_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const MIN_NICKNAME_LENGTH = 1;
 export const MAX_NICKNAME_LENGTH = 16;

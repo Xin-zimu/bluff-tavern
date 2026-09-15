@@ -2,6 +2,16 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [7.1.4] - 2026-09-15
+
+### Fixed
+
+- 修复 REVEAL 到 VERDICT / 左轮阶段的翻牌视觉交接；已经翻开的牌现在在电影层内持续保持正面，不再因组件替换短暂露出牌背。
+
+### Tests
+
+- 增加翻牌视觉状态模型测试，验证公开牌从 REVEAL 正面状态进入 VERDICT、PUNISHMENT 和 ROUND_END 后保持 front-locked。
+
 ## [7.1.3] - 2026-09-15
 
 ### Fixed

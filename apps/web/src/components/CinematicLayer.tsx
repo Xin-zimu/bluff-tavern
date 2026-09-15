@@ -1,6 +1,7 @@
-import type { CardRank, GamePhase, GameView, RoomView } from '@bluff-tavern/shared';
+import type { GamePhase, GameView, RoomView } from '@bluff-tavern/shared';
 import type { CSSProperties } from 'react';
 import { CINEMATIC_ART } from '../art';
+import { getCinematicRevealState } from './cinematic-reveal-state';
 
 interface CinematicLayerProps {
   game: GameView;
@@ -24,12 +25,6 @@ const phaseLabels: Record<GamePhase, string> = {
   GAME_OVER: '最终胜者',
 };
 
-const REVEAL_TIMING = {
-  intro: 500,
-  perCard: 750,
-  finalHold: 1_000,
-} as const;
-
 export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
   if (game.phase === 'TURN' || game.phase === 'CHALLENGE_WINDOW') return null;
   const elapsed = Math.max(0, now - game.phaseStartedAt);
@@ -43,6 +38,8 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
   const result = game.punishment;
   const eventClass = game.tavernEvent ? ` cinematic--event-${game.tavernEvent.type.toLowerCase().replace('_', '-')}` : '';
   const punishmentSubtitle = game.tavernEvent?.type === 'DOUBLE_DANGER' ? '危机加剧' : '扣动扳机';
+  const revealState = getCinematicRevealState(game, elapsed);
+  const revealActive = revealState.cards.length > 0;
 
   return <div className={`cinematic cinematic--${game.phase.toLowerCase()}${game.punishment?.hit ? ' cinematic--hit' : ''}${eventClass}`} aria-live="polite" style={{ '--phase-progress': progress } as CSSProperties}>
     <div className="cinematic__progress" aria-hidden="true"><span /></div>
@@ -50,7 +47,7 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
       <p className="cinematic__phase">{phaseLabels[game.phase]}</p>
       {game.phase === 'ROUND_START' && <RoundIntro game={game} progress={progress} />}
       {game.phase === 'CHALLENGE_CALLOUT' && <Callout challenger={challenger} challenged={challenged} />}
-      {game.phase === 'REVEAL' && <Reveal cards={game.challenge?.revealedCards ?? []} game={game} elapsed={elapsed} />}
+      {revealActive && <Reveal state={revealState} compact={game.phase !== 'REVEAL'} />}
       {game.phase === 'VERDICT' && <Verdict game={game} punished={punished} />}
       {game.phase === 'PUNISHMENT_INTRO' && <RevolverBeat title={punished} subtitle="弹巢旋转" chamber={null} />}
       {game.phase === 'PUNISHMENT_TRIGGER' && <RevolverBeat title={punished} subtitle={punishmentSubtitle} chamber={null} tense />}
@@ -85,15 +82,12 @@ function Callout({ challenger, challenged }: { challenger: string; challenged: s
   </div>;
 }
 
-function Reveal({ cards, game, elapsed }: { cards: CardRank[]; game: GameView; elapsed: number }) {
-  const settledAt = REVEAL_TIMING.intro + cards.length * REVEAL_TIMING.perCard;
-  return <div className={`reveal-cards ${elapsed >= settledAt ? 'is-settled' : ''}`}>
-    {cards.map((card, index) => {
-      const visible = elapsed >= REVEAL_TIMING.intro + index * REVEAL_TIMING.perCard;
-      const honest = card === game.targetRank || (card === 'JOKER' && game.tavernEvent?.type !== 'NO_JOKER');
-      return <div key={`${card}-${index}`} className={`reveal-card reveal-card--${card.toLowerCase()} ${visible ? 'is-flipped' : ''} ${honest ? 'is-honest' : 'is-bluff'}`} style={{ '--card-index': index } as CSSProperties}>
+function Reveal({ state, compact }: { state: ReturnType<typeof getCinematicRevealState>; compact: boolean }) {
+  return <div className={`reveal-cards${state.settled ? ' is-settled' : ''}${compact ? ' reveal-cards--persistent' : ''}`}>
+    {state.cards.map((card, index) => {
+      return <div key={`${card.rank}-${index}`} className={`reveal-card reveal-card--${card.rank.toLowerCase()} ${card.flipped ? 'is-flipped' : ''} ${card.frontLocked ? 'is-front-locked' : ''} ${card.honest ? 'is-honest' : 'is-bluff'}`} style={{ '--card-index': index } as CSSProperties}>
         <span className="reveal-card__back">?</span>
-        <span className="reveal-card__front">{card}</span>
+        <span className="reveal-card__front">{card.rank}</span>
       </div>;
     })}
   </div>;
