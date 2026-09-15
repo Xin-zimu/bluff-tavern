@@ -297,7 +297,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .reveal-card__front::after { content: ''; position: absolute; inset: 8px; border-radius: 4px; opacity: 0; pointer-events: none; }
 .reveal-card.is-honest.is-flipped .reveal-card__front::after { opacity: 1; border: 1px solid rgba(242,199,119,.78); box-shadow: inset 0 0 18px rgba(242,199,119,.42), 0 0 14px rgba(242,199,119,.4); }
 .reveal-card.is-bluff.is-flipped .reveal-card__front::after { opacity: 1; border: 1px solid rgba(255,117,109,.78); box-shadow: inset 0 0 18px rgba(255,117,109,.38), 0 0 14px rgba(255,117,109,.35); }
-.reveal-cards.is-settled .reveal-card.is-bluff { filter: drop-shadow(0 0 14px rgba(255,117,109,.48)); animation: verdict-shake .42s ease-out; }
+.reveal-cards.is-settled .reveal-card.is-bluff { filter: drop-shadow(0 0 14px rgba(255,117,109,.48)) drop-shadow(0 0 24px rgba(255,117,109,.18)); }
 .reveal-cards.is-settled .reveal-card.is-honest { filter: drop-shadow(0 0 12px rgba(242,199,119,.34)); }
 .verdict { display: grid; gap: 12px; }
 .verdict__seal { width: 78px; height: 78px; justify-self: center; border: 3px solid currentColor; border-radius: 50%; opacity: .72; box-shadow: inset 0 0 18px currentColor, 0 0 28px currentColor; animation: verdict-seal .46s cubic-bezier(.2,1,.22,1) both; }
@@ -424,7 +424,6 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .app-shell--low-power .revolver-stage__gun,
 .app-shell--low-power .revolver-stage__flash,
 .app-shell--low-power .revolver-stage__cylinder,
-.app-shell--low-power .reveal-cards.is-settled .reveal-card.is-bluff,
 .app-shell--low-power .verdict__seal,
 .app-shell--low-power .game-players .is-newly-eliminated,
 .app-shell--low-power .hand--tipsy .card,
@@ -438,7 +437,6 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .app-shell--reduce-motion .revolver-stage__gun,
 .app-shell--reduce-motion .revolver-stage__flash,
 .app-shell--reduce-motion .revolver-stage__cylinder,
-.app-shell--reduce-motion .reveal-cards.is-settled .reveal-card.is-bluff,
 .app-shell--reduce-motion .verdict__seal,
 .app-shell--reduce-motion .game-players .is-newly-eliminated,
 .app-shell--reduce-motion .hand--tipsy .card,

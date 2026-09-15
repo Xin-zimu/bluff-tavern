@@ -2,6 +2,17 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [7.1.5] - 2026-09-15
+
+### Fixed
+
+- 移除 settled bluff 公开牌自身的 shake 动画，避免 `verdict-shake` 的 `transform` 覆盖已经锁定的 `rotateY(180deg)` 正面状态。
+- 保留撒谎判定文本的 shake 动效；已公开的牌在结算后只保留静态红色高亮。
+
+### Tests
+
+- 增加翻牌 CSS 回归测试，防止 reveal-card 选择器重新引入会覆盖正面锁定的 transform 动画。
+
 ## [7.1.4] - 2026-09-15
 
 ### Fixed
