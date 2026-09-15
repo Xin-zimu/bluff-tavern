@@ -1,4 +1,4 @@
-const CACHE = 'bluff-tavern-v7.1.5-reveal-css1';
+const CACHE = 'bluff-tavern-v7.1.6-static-reveal1';
 const APP_SHELL = '/';
 
 self.addEventListener('install', (event) => {

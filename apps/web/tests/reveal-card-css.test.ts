@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(resolve(process.cwd(), 'apps/web/src/styles.css'), 'utf8');
+const removedSealClass = ['verdict', 'seal'].join('__');
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -15,9 +16,8 @@ function ruleBody(selector: string) {
 }
 
 describe('reveal card CSS transform safety', () => {
-  it('keeps flipped and front-locked reveal cards on their front face', () => {
+  it('keeps flipped reveal cards on their front face during REVEAL', () => {
     expect(ruleBody('.reveal-card.is-flipped')).toContain('rotateY(180deg)');
-    expect(ruleBody('.reveal-card.is-front-locked')).toContain('rotateY(180deg)');
   });
 
   it('does not animate or transform settled bluff cards', () => {
@@ -41,5 +41,14 @@ describe('reveal card CSS transform safety', () => {
       .map((match) => (match[1] ?? '').trim());
 
     expect(revealCardAnimatedRules).toEqual([]);
+  });
+
+  it('renders post-REVEAL public cards as static face-up cards', () => {
+    const body = ruleBody('.static-reveal-card');
+
+    expect(body).toContain('animation: none');
+    expect(body).not.toMatch(/\btransform\s*:/);
+    expect(body).not.toContain('rotateY');
+    expect(css).not.toContain(`.${removedSealClass}`);
   });
 });

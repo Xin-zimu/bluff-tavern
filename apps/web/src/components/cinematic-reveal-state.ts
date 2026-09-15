@@ -8,6 +8,9 @@ export const REVEAL_TIMING = {
 
 const CINEMATIC_REVEAL_PHASES = new Set<GamePhase>([
   'REVEAL',
+]);
+
+const STATIC_REVEAL_PHASES = new Set<GamePhase>([
   'VERDICT',
   'PUNISHMENT_INTRO',
   'PUNISHMENT_TRIGGER',
@@ -30,15 +33,25 @@ export interface CinematicRevealState {
 export function getCinematicRevealState(game: Pick<GameView, 'phase' | 'challenge' | 'targetRank' | 'tavernEvent'>, elapsed: number): CinematicRevealState {
   const cards = game.challenge?.revealedCards;
   if (!cards || !CINEMATIC_REVEAL_PHASES.has(game.phase)) return { cards: [], settled: false };
-  const frontLocked = game.phase !== 'REVEAL';
   const settledAt = REVEAL_TIMING.intro + cards.length * REVEAL_TIMING.perCard;
   return {
-    settled: frontLocked || elapsed >= settledAt,
+    settled: elapsed >= settledAt,
     cards: cards.map((rank, index) => ({
       rank,
-      frontLocked,
-      flipped: frontLocked || elapsed >= REVEAL_TIMING.intro + index * REVEAL_TIMING.perCard,
+      frontLocked: false,
+      flipped: elapsed >= REVEAL_TIMING.intro + index * REVEAL_TIMING.perCard,
       honest: rank === game.targetRank || (rank === 'JOKER' && game.tavernEvent?.type !== 'NO_JOKER'),
     })),
   };
+}
+
+export function getStaticRevealedCards(game: Pick<GameView, 'phase' | 'challenge' | 'targetRank' | 'tavernEvent'>): CinematicRevealCardState[] {
+  const cards = game.challenge?.revealedCards;
+  if (!cards || !STATIC_REVEAL_PHASES.has(game.phase)) return [];
+  return cards.map((rank) => ({
+    rank,
+    frontLocked: true,
+    flipped: true,
+    honest: rank === game.targetRank || (rank === 'JOKER' && game.tavernEvent?.type !== 'NO_JOKER'),
+  }));
 }

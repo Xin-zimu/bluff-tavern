@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardRank, GamePhase, GameView } from '@bluff-tavern/shared';
-import { getCinematicRevealState, REVEAL_TIMING } from '../src/components/cinematic-reveal-state';
+import { getCinematicRevealState, getStaticRevealedCards, REVEAL_TIMING } from '../src/components/cinematic-reveal-state';
 
 function game(phase: GamePhase, cards: CardRank[] | null = ['A', 'Q', 'JOKER']): Pick<GameView, 'phase' | 'challenge' | 'targetRank' | 'tavernEvent'> {
   return {
@@ -35,18 +35,20 @@ describe('cinematic reveal visual state', () => {
     expect(getCinematicRevealState(game('REVEAL'), thirdFlip).cards.map((card) => card.flipped)).toEqual([true, true, true]);
   });
 
-  it.each(['VERDICT', 'PUNISHMENT_INTRO', 'PUNISHMENT_TRIGGER', 'PUNISHMENT_RESULT', 'ROUND_END'] as const)('keeps cards front-locked during %s', (phase) => {
-    const state = getCinematicRevealState(game(phase), 0);
+  it.each(['VERDICT', 'PUNISHMENT_INTRO', 'PUNISHMENT_TRIGGER', 'PUNISHMENT_RESULT', 'ROUND_END'] as const)('does not reuse animated reveal cards during %s', (phase) => {
+    expect(getCinematicRevealState(game(phase), 0).cards).toEqual([]);
+  });
 
-    expect(state.settled).toBe(true);
-    expect(state.cards.map((card) => ({ flipped: card.flipped, frontLocked: card.frontLocked }))).toEqual([
-      { flipped: true, frontLocked: true },
-      { flipped: true, frontLocked: true },
-      { flipped: true, frontLocked: true },
+  it.each(['VERDICT', 'PUNISHMENT_INTRO', 'PUNISHMENT_TRIGGER', 'PUNISHMENT_RESULT', 'ROUND_END'] as const)('uses static face-up cards during %s', (phase) => {
+    expect(getStaticRevealedCards(game(phase)).map((card) => ({ rank: card.rank, flipped: card.flipped, frontLocked: card.frontLocked }))).toEqual([
+      { rank: 'A', flipped: true, frontLocked: true },
+      { rank: 'Q', flipped: true, frontLocked: true },
+      { rank: 'JOKER', flipped: true, frontLocked: true },
     ]);
   });
 
   it('clears the persistent reveal on the next round start', () => {
     expect(getCinematicRevealState(game('ROUND_START', null), 0).cards).toEqual([]);
+    expect(getStaticRevealedCards(game('ROUND_START', null))).toEqual([]);
   });
 });

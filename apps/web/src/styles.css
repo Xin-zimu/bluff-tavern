@@ -254,8 +254,8 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .victory-panel .fullscreen-button { position: relative; }
 .victory-panel .play-button { position: relative; margin-inline: auto; }
 
-.cinematic { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; padding: max(72px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: rgba(8,5,4,.58); backdrop-filter: blur(4px) saturate(.85); pointer-events: none; }
-.cinematic__panel { width: min(92vw, 660px); min-height: 270px; display: grid; place-items: center; gap: 14px; padding: clamp(22px, 5vw, 42px); border: 1px solid rgba(242,199,119,.5); border-radius: 8px; background: linear-gradient(145deg, rgba(35,21,17,.92), rgba(12,8,7,.96)); box-shadow: 0 26px 70px #000b, inset 0 0 44px rgba(242,199,119,.07); }
+.cinematic { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; padding: max(52px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); background: rgba(8,5,4,.58); backdrop-filter: blur(4px) saturate(.85); pointer-events: none; }
+.cinematic__panel { width: min(92vw, 620px); min-height: 228px; display: grid; place-items: center; align-content: center; gap: 10px; padding: clamp(18px, 3.6vw, 30px); border: 1px solid rgba(242,199,119,.5); border-radius: 8px; background: linear-gradient(145deg, rgba(35,21,17,.92), rgba(12,8,7,.96)); box-shadow: 0 24px 64px #000b, inset 0 0 36px rgba(242,199,119,.07); }
 .cinematic__phase { margin: 0; color: #d4a85d; font-size: .74rem; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; }
 .cinematic__panel h2 { margin: 0; color: #ffe1a1; font-family: Georgia, "Songti SC", serif; font-size: clamp(2rem, 8vw, 4.4rem); line-height: 1; text-shadow: 0 3px 18px #000; }
 .cinematic__panel p { margin: 0; color: #dbcab3; font-weight: 750; }
@@ -283,12 +283,8 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .cinematic--event-candle-flicker.cinematic--reveal .cinematic__panel { border-color: rgba(242,199,119,.78); box-shadow: 0 28px 80px #000c, 0 0 46px rgba(242,199,119,.2); }
 .cinematic--event-double-danger.cinematic--punishment_trigger .cinematic__panel { border-color: rgba(255,117,109,.72); box-shadow: 0 28px 80px #000c, 0 0 52px rgba(255,117,109,.24); }
 .reveal-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; perspective: 900px; }
-.reveal-cards--persistent { gap: 10px; margin: -2px 0 4px; }
 .reveal-card { position: relative; width: clamp(68px, 16vw, 98px); aspect-ratio: 76 / 118; transform: translateY(6px) rotateY(0) scale(.96); transform-style: preserve-3d; transition: transform .5s cubic-bezier(.2,.72,.18,1), filter .22s ease; transition-delay: calc(var(--card-index) * 90ms); }
 .reveal-card.is-flipped { transform: translateY(0) rotateY(180deg) scale(1); }
-.reveal-cards--persistent .reveal-card { width: clamp(54px, 10vw, 74px); transition: filter .22s ease; transition-delay: 0ms; }
-.reveal-card.is-front-locked { transform: translateY(0) rotateY(180deg) scale(1); }
-.reveal-card.is-front-locked .reveal-card__back { display: none; }
 .reveal-card__back,
 .reveal-card__front { position: absolute; inset: 0; display: grid; place-items: center; backface-visibility: hidden; border: 2px solid #a67c3d; border-radius: 7px; box-shadow: inset 0 0 0 3px #6e4029, 0 10px 18px #0009; font-family: Georgia, serif; font-size: clamp(1.35rem, 4.6vw, 2.4rem); font-weight: 900; transition: opacity .18s ease; }
 .reveal-card__back { color: #d4a85d; background: url('/assets/cards/card_back.png') center/cover, #2b1914; }
@@ -299,14 +295,19 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .reveal-card.is-bluff.is-flipped .reveal-card__front::after { opacity: 1; border: 1px solid rgba(255,117,109,.78); box-shadow: inset 0 0 18px rgba(255,117,109,.38), 0 0 14px rgba(255,117,109,.35); }
 .reveal-cards.is-settled .reveal-card.is-bluff { filter: drop-shadow(0 0 14px rgba(255,117,109,.48)) drop-shadow(0 0 24px rgba(255,117,109,.18)); }
 .reveal-cards.is-settled .reveal-card.is-honest { filter: drop-shadow(0 0 12px rgba(242,199,119,.34)); }
-.verdict { display: grid; gap: 12px; }
-.verdict__seal { width: 78px; height: 78px; justify-self: center; border: 3px solid currentColor; border-radius: 50%; opacity: .72; box-shadow: inset 0 0 18px currentColor, 0 0 28px currentColor; animation: verdict-seal .46s cubic-bezier(.2,1,.22,1) both; }
+.static-reveal-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 0 0 2px; }
+.static-reveal-card { position: relative; width: clamp(52px, 9vw, 72px); aspect-ratio: 76 / 118; display: inline-grid; place-items: center; border: 2px solid #a67c3d; border-radius: 7px; color: #5b1f28; background: linear-gradient(135deg,#f3ddad 0%,#b18b57 48%,#e8ddc8 100%); box-shadow: inset 0 0 0 3px #6e4029, 0 10px 18px rgba(0,0,0,.48), 0 0 14px rgba(242,199,119,.12); overflow: hidden; font-family: Georgia, serif; font-size: clamp(1rem, 3vw, 1.55rem); font-weight: 900; transition: none; animation: none; }
+.static-reveal-card::after { content: ''; position: absolute; inset: 7px; border-radius: 4px; pointer-events: none; border: 1px solid rgba(242,199,119,.58); box-shadow: inset 0 0 14px rgba(242,199,119,.24); }
+.static-reveal-card.is-bluff::after { border-color: rgba(255,117,109,.72); box-shadow: inset 0 0 14px rgba(255,117,109,.24), 0 0 12px rgba(255,117,109,.28); }
+.static-reveal-card--joker { font-size: clamp(.66rem, 1.8vw, .92rem); }
+.verdict { display: grid; place-items: center; gap: 7px; margin-top: -1px; }
 .verdict--bluff h2 { color: #ff756d; animation: verdict-shake .55s ease-out; }
 .verdict--bluff { color: rgba(255,117,109,.48); }
 .verdict--truth { color: rgba(242,199,119,.44); animation: verdict-freeze .7s ease-out both; }
 .verdict--truth h2 { color: #f2c777; }
-.revolver-beat { display: grid; place-items: center; gap: 14px; }
-.revolver-stage { position: relative; width: min(78vw, 560px); aspect-ratio: 1774 / 887; isolation: isolate; filter: drop-shadow(0 22px 26px #000b); transform-origin: 40% 58%; }
+.revolver-beat { display: grid; place-items: center; gap: 8px; margin-top: -2px; }
+.revolver-beat h2 { font-size: clamp(1.65rem, 5.6vw, 3.1rem); }
+.revolver-stage { position: relative; width: min(72vw, 470px); aspect-ratio: 1774 / 887; isolation: isolate; filter: drop-shadow(0 18px 22px #000b); transform-origin: 40% 58%; margin: -4px 0 -2px; }
 .revolver-stage::before { content: ''; position: absolute; left: 18%; right: 4%; bottom: 11%; z-index: -1; height: 18%; border-radius: 50%; background: radial-gradient(ellipse, rgba(0,0,0,.6), transparent 72%); filter: blur(8px); }
 .revolver-stage__gun { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: 33% 58%; }
 .revolver-stage__flash { position: absolute; left: 77%; top: 25%; width: 38%; height: 48%; object-fit: contain; opacity: 0; transform: translateX(-12%) scale(.7); transform-origin: left center; mix-blend-mode: screen; filter: drop-shadow(0 0 18px rgba(255,182,68,.82)); }
@@ -323,11 +324,14 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .revolver-stage.is-hit .revolver-stage__gun { animation: gun-recoil .3s cubic-bezier(.15,.85,.28,1) both; }
 .revolver-stage.is-hit .revolver-stage__flash { animation: muzzle-blast .48s ease-out both; }
 .revolver-stage.is-dry .revolver-stage__flash { animation: dry-smoke .72s ease-out both; filter: grayscale(.7) brightness(.7) drop-shadow(0 0 10px rgba(190,180,160,.25)); }
-.punishment-result { display: grid; gap: 10px; }
+.punishment-result { display: grid; place-items: center; gap: 6px; }
 .punishment-result.is-hit::before { content: ''; position: fixed; inset: 0; background: white; opacity: 0; animation: white-flash .28s ease-out; pointer-events: none; }
 .punishment-result.is-hit .revolver-beat h2 { color: #ff756d; }
 .punishment-result.is-dry .revolver-beat h2 { color: #f2c777; }
 .cinematic--punishment_result.cinematic--hit .cinematic__panel { animation: table-shake .42s ease-out; }
+.round-end { display: grid; place-items: center; gap: 7px; }
+.round-end h2 { font-size: clamp(1.85rem, 6vw, 3.3rem); }
+.round-end p { color: #c8b9a1; }
 .cinematic-victory { display: grid; place-items: center; gap: 12px; }
 .cinematic-victory::before { content: ''; width: min(52vw, 280px); aspect-ratio: 1; border-radius: 50%; background: url('/assets/effects/victory_particles.png') center/cover; opacity: .72; filter: drop-shadow(0 0 24px rgba(242,199,119,.24)); animation: winner-focus .85s ease-out both; }
 .cinematic-victory p { color: #f2c777; font-family: Georgia, "Songti SC", serif; font-size: clamp(1.6rem, 6vw, 3.2rem); text-shadow: 0 3px 14px #000; }
@@ -351,10 +355,6 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
   25% { transform: translateX(-5px) rotate(-1deg); }
   50% { transform: translateX(5px) rotate(1deg); }
   75% { transform: translateX(-2px); }
-}
-@keyframes verdict-seal {
-  from { opacity: 0; transform: scale(1.35) rotate(-9deg); }
-  to { opacity: .72; transform: scale(1) rotate(0); }
 }
 @keyframes verdict-freeze {
   0% { filter: brightness(1); transform: scale(1.04); }
@@ -424,7 +424,6 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .app-shell--low-power .revolver-stage__gun,
 .app-shell--low-power .revolver-stage__flash,
 .app-shell--low-power .revolver-stage__cylinder,
-.app-shell--low-power .verdict__seal,
 .app-shell--low-power .game-players .is-newly-eliminated,
 .app-shell--low-power .hand--tipsy .card,
 .app-shell--low-power .victory-panel,
@@ -437,7 +436,6 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .app-shell--reduce-motion .revolver-stage__gun,
 .app-shell--reduce-motion .revolver-stage__flash,
 .app-shell--reduce-motion .revolver-stage__cylinder,
-.app-shell--reduce-motion .verdict__seal,
 .app-shell--reduce-motion .game-players .is-newly-eliminated,
 .app-shell--reduce-motion .hand--tipsy .card,
 .app-shell--reduce-motion .victory-panel,
@@ -459,8 +457,10 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
   .challenge-result { padding-inline: 18px; }
   .onboarding-tip { display: grid; justify-items: stretch; text-align: center; }
   .rules-grid { grid-template-columns: 1fr; }
-  .cinematic__panel { min-height: 238px; }
-  .revolver-stage { width: min(54vw, 250px); transform: translateX(-18px); }
+  .cinematic__panel { min-height: 218px; }
+  .static-reveal-cards { gap: 7px; }
+  .static-reveal-card { width: clamp(46px, 15vw, 58px); }
+  .revolver-stage { width: min(72vw, 292px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
