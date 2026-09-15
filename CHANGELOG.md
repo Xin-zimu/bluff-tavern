@@ -2,6 +2,103 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [7.1.6] - 2026-09-15
+
+### Fixed
+
+- 将质疑翻牌收口为 `REVEAL` 动画牌与后续静态正面牌两套 DOM，避免 VERDICT / PUNISHMENT / ROUND_END 阶段继续复用 3D 翻牌结构。
+- 移除 `REVEAL` settled finalHold 期间作用在 3D `.reveal-card` 本体上的 filter，避免最后一张翻完后的等待阶段触发合成层回退。
+- 删除判定页无意义圆环，并收紧判定、左轮和回合结束电影层布局，恢复更集中、紧凑的舞台感。
+
+### Tests
+
+- 增加电影层渲染测试，验证非 REVEAL 阶段没有翻牌背面 DOM，且只渲染静态正面公开牌。
+- 更新 CSS 回归测试，防止静态公开牌重新引入 flip / rotateY / transform 动画，并禁止 settled reveal-card 本体重新获得 filter / transform / animation。
+
+## [7.1.5] - 2026-09-15
+
+### Fixed
+
+- 移除 settled bluff 公开牌自身的 shake 动画，避免 `verdict-shake` 的 `transform` 覆盖已经锁定的 `rotateY(180deg)` 正面状态。
+- 保留撒谎判定文本的 shake 动效；已公开的牌在结算后只保留静态红色高亮。
+
+### Tests
+
+- 增加翻牌 CSS 回归测试，防止 reveal-card 选择器重新引入会覆盖正面锁定的 transform 动画。
+
+## [7.1.4] - 2026-09-15
+
+### Fixed
+
+- 修复 REVEAL 到 VERDICT / 左轮阶段的翻牌视觉交接；已经翻开的牌现在在电影层内持续保持正面，不再因组件替换短暂露出牌背。
+
+### Tests
+
+- 增加翻牌视觉状态模型测试，验证公开牌从 REVEAL 正面状态进入 VERDICT、PUNISHMENT 和 ROUND_END 后保持 front-locked。
+
+## [7.1.3] - 2026-09-15
+
+### Fixed
+
+- 修复质疑翻牌完成后公开牌瞬间恢复为牌背的问题；公开牌现在会保持至本轮结束。
+- 修复角色能力关闭时角色选择区域仍突出技能名称和技能效果的问题。
+
+### Changed
+
+- 重构 Desktop 酒馆大厅布局，降低模式、玩家、角色和操作区域的纵向占用。
+- Desktop 大厅更加充分利用横向空间，同时保持 Mobile 纵向响应式布局。
+
+### Tests
+
+- 增加 Free Challenge 真实 Socket.IO 多客户端并发抢质疑测试。
+- 增加质疑窗口超时、唯一 Challenger、无人质疑、非法质疑和断线重连边界验证。
+
+## [7.1.2] - 2026-09-15
+
+### Fixed
+
+- 旧的 V7 酒馆事件扩展开关只允许 Classic / Quick 叠加，特殊模式不再抽取旧 Tavern Event。
+- Party 模式大厅改为显示“每轮随机事件”固定启用，避免误以为旧开关能关闭 Party 事件。
+- Legacy Tavern Event 池收回到 Rapid Night / Candle Flicker，Double Danger 只作为 Party 规则事件出现。
+- Double Danger 第一枪空枪时的底部提示改为“还需再开一枪”。
+
+## [7.1.1] - 2026-09-14
+
+### Fixed
+
+- Party 模式事件现在默认公开给客户端，不再受旧的 V7 酒馆事件开关影响。
+- Free Challenge 窗口结束后禁止下一名玩家再次质疑同一手，并对超时请求返回窗口关闭错误。
+- Free Challenge 空手超时强制质疑改为服务器内部执行，可处理下一名存活玩家暂时离线的情况。
+- Shared Revolver 的共享枪状态延后到惩罚触发时才提交，避免在揭牌和惩罚动画前泄露空枪或命中结果。
+- 更新 FORCED_BET 事件文案和动态 RulesPanel，规则说明会按当前模式和当前 Party 事件生成。
+
+## [7.1.0] - 2026-09-14
+
+### Added
+
+- 新增 V7.1 多模式基础：共享类型保留完整计划模式，但协议只开放已实现的 Classic、Quick 和 Escalation。
+- 新增 Escalation / 加注模式：上一手出几张，下一手至少出几张；手牌不足时服务器强制进入质疑。
+- 大厅节奏下拉改为模式卡片，未开放的 Party、Free Challenge、Shared Revolver 和 Custom 保持计划中状态。
+- 游戏内显示加注最低出牌数，并用服务端 `minimumPlayCount` 保护出牌按钮和状态提示。
+
+### Changed
+
+- 当前版本、页面标题、页脚、健康检查版本和 Service Worker cache key 更新为 V7.1。
+- V7.0 多模式计划文档调整为 V7.1 基线，明确当前角色能力保留但不继续作为本阶段主线扩展。
+
+## [7.0.0] - 2026-09-14
+
+### Added
+
+- 新增 V7.0-A/B/C/D 扩展玩法基础：房间开关、低风险道具、酒馆事件和角色能力。
+- 道具首批开放望远镜、旧怀表、酒杯；库存和使用结果只进入当前玩家私有快照。
+- 酒馆事件首批开放快速夜、烛火摇曳、双倍危机；默认关闭，只在房主开启后每轮小概率触发。
+- 角色能力首批覆盖 8 个原创角色；能力效果只进入对应玩家私有快照，默认关闭且不改写惩罚命中。
+
+### Changed
+
+- 页面标题、页脚、健康检查版本和 Service Worker cache key 收束为 V7.0。
+
 ## [6.7.0] - 2026-09-13
 
 ### Changed

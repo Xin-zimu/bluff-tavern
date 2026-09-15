@@ -11,7 +11,7 @@ import { RoomStore } from './rooms/room-store.js';
 import { registerRoomHandlers } from './socket/register-room-handlers.js';
 import { GameService } from './game/game-service.js';
 import { GameScheduler } from './game/game-scheduler.js';
-import { cryptoRandom } from './game/random.js';
+import { cryptoRandom, type RandomService } from './game/random.js';
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.css': 'text/css; charset=utf-8',
@@ -43,7 +43,7 @@ async function sendWebFile(reply: FastifyReply, filePath: string, cacheControl: 
   }
 }
 
-export async function createApp(config: ServerConfig) {
+export async function createApp(config: ServerConfig & { random?: RandomService }) {
   const startedAt = Date.now();
   const app = Fastify({ logger: { level: config.logLevel } });
   await app.register(cors, { origin: config.clientOrigin });
@@ -77,7 +77,7 @@ export async function createApp(config: ServerConfig) {
     cors: { origin: config.clientOrigin }, transports: ['websocket', 'polling'],
   });
   const rooms = new RoomStore();
-  const games = new GameService(cryptoRandom);
+  const games = new GameService(config.random ?? cryptoRandom);
   const scheduler = new GameScheduler();
   app.get('/health', () => ({
     status: 'ok',
@@ -90,6 +90,8 @@ export async function createApp(config: ServerConfig) {
     timestamp: Date.now(),
   }));
   io.on('connection', (socket) => registerRoomHandlers(io, socket, rooms, games, scheduler, app.log));
-  app.addHook('onClose', () => io.close());
+  app.addHook('preClose', async () => {
+    await io.close();
+  });
   return { app, io, rooms };
 }

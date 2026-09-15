@@ -1,0 +1,162 @@
+# Bluff Tavern V7 Plan
+
+V7 的目标是把 V6.7 已经稳定的基础流程保护住，在独立开关后面小步恢复扩展内容。任何 V7 功能都必须默认关闭、服务端权威、可测试，并且不能破坏 V6 经典模式的发牌、翻牌、质疑、惩罚和结算节奏。
+
+## Scope
+
+V7 只新增四类能力：
+
+- 道具
+- 酒馆事件
+- 角色能力
+- 基础房间开关
+
+V7 仍不做：
+
+- 商店
+- 货币
+- 排位
+- 好友
+- 公共匹配
+- 复杂社交
+
+## V7.0-A: Extension Toggles
+
+房间设置增加 `settings.v7`，包含：
+
+```ts
+interface V7ExtensionSettings {
+  itemsEnabled: boolean;
+  tavernEventsEnabled: boolean;
+  characterAbilitiesEnabled: boolean;
+}
+```
+
+默认值全部为 `false`。V6 经典模式和快速模式必须在不开启任何扩展时保持现有体验。服务端只接受房主在大厅阶段修改这些开关；开局后本局游戏使用开局时的房间设置。
+
+验收标准：
+
+- 新建房间时三个 V7 开关全部关闭。
+- 旧客户端不传 `settings.v7` 时，服务端保留现有开关值。
+- 切换开关会清空玩家准备状态，避免玩家在规则变化后误开局。
+- 开关存在本身不改变核心判定；具体效果只能在后续小版本接入。
+
+## V7.0-B: Items
+
+第一批只做低风险道具：
+
+- 望远镜：查看自己下一发风险提示，或查看一张自己手牌的规则说明。
+- 怀表：自己回合一次性延长时间。
+- 酒杯：干扰 UI 或提示，不改变核心判定。
+
+第一批不做：
+
+- 换别人牌
+- 偷看别人牌
+- 改写惩罚结果
+- 任何需要复杂跨客户端隐藏信息同步的道具
+
+服务端必须在 `itemsEnabled` 为 `true` 时才分配和执行道具。客户端只能发送使用意图，不能自行决定结果。
+
+当前 V7.0-B 落地边界：
+
+- `itemsEnabled=false` 时不发放道具，`game:useItem` 返回关闭错误。
+- `itemsEnabled=true` 时开局给每名玩家发 1 个第一批低风险道具。
+- `GameSnapshot.items` 只包含当前查看者自己的库存。
+- 望远镜只给自己显示下一次受罚风险高/低提示，不公开弹巢位置。
+- 旧怀表只能在自己的 `TURN` 使用，延长当前回合倒计时一次。
+- 酒杯只给自己触发短暂 UI 晃动提示，不改变手牌、出牌、质疑或惩罚判定。
+
+## V7.0-C: Tavern Events
+
+每轮开始时小概率触发公开酒馆事件，第一批事件只影响节奏或表现：
+
+- 快速夜：本轮回合时间缩短。
+- 烛火摇曳：本轮质疑动画更紧张，但不改规则。
+- 双倍危机：惩罚阶段增加视觉和心理压力，第一版不增加实弹。
+
+服务端必须在 `tavernEventsEnabled` 为 `true` 时才抽取事件。事件结果写入权威快照，客户端只负责展示。
+
+当前 V7.0-C 落地边界：
+
+- `tavernEventsEnabled=false` 时 `GameSnapshot.tavernEvent` 始终为 `null`。
+- `tavernEventsEnabled=true` 时每轮开始有小概率抽取公开事件。
+- 快速夜会缩短本轮回合倒计时，但不改变出牌、质疑或惩罚规则。
+- 烛火摇曳只加强本轮质疑/翻牌演出节奏。
+- 双倍危机只加强本轮惩罚演出压力，第一版不增加实弹。
+
+## V7.0-D: Character Abilities
+
+每个角色一个轻量能力，优先被动或一次性主动。第一版不做复杂连锁、不做多段响应窗口。
+
+能力设计要求：
+
+- 服务端权威。
+- 可通过 `characterAbilitiesEnabled` 关闭。
+- 可用单元测试覆盖。
+- 不绕过 V6 核心状态机阶段锁。
+
+当前 V7.0-D 落地边界：
+
+- `characterAbilitiesEnabled=false` 时 `GameSnapshot.abilityEffect` 始终为 `null`。
+- 开局时冻结每名玩家的角色，牌局进行中不读取大厅后续角色变化。
+- 能力效果只通过 `GameSnapshot.abilityEffect` 发给对应玩家，不向其他玩家泄露私有效果。
+- 灰狼「牌桌嗅觉」：每轮自己的第一次回合获得公开局势和自己手牌目标数提示。
+- 赤狐「花言」：本局第一次自己的回合获得一次基于自己手牌的低风险出牌建议。
+- 棕熊「稳坐」：作为本轮先手时，自己的开局回合小幅延长。
+- 白兔「抢秒」：本局第一次自己的回合小幅延长。
+- 黑猫「夜眼」：每轮开始时获得自己下一次受罚高低风险提示。
+- 浣熊「摸袋」：若同时启用道具，开局额外获得一件第一批低风险道具；道具关闭时只显示跳过提示。
+- 青蛙「沉息」：本局第一次被迫质疑时额外获得思考时间。
+- 熊猫「记牌」：每次揭牌结论阶段获得本次已公开牌面的记牌摘要。
+
+V7.0 角色能力第一版不做：
+
+- 主动技能按钮。
+- 技能响应窗口。
+- 影响他人手牌或行动。
+- 偷看他人隐藏信息。
+- 抵消惩罚、改写命中结果或增加实弹。
+
+## V7.1: Multi-Mode Release Candidate
+
+V7.1.6 的正式可玩模式为：
+
+- Classic
+- Quick
+- Escalation
+- Shared Revolver
+- Free Challenge
+- Party
+
+Custom 仍为计划中模式，协议类型保留但不可在大厅开局。V7.1 的重点是“一局只选择一种特殊模式”，不把 Party、Shared Revolver、Free Challenge 和 Escalation 叠加成组合规则。
+
+当前 RC 边界：
+
+- `GameService` 仍是唯一服务器权威状态机。
+- Free Challenge 的 3 秒抢质疑窗口由服务器持有，真实 Socket.IO 多客户端并发测试覆盖“最多一个 challenger 成功”。
+- Shared Revolver 只公开安全的共享左轮状态，服务端继续隐藏 `bulletPosition`。
+- Party 每轮随机事件独立于旧 V7 tavern event switch。
+- V7.1.6 Reveal 结构保持稳定：`REVEAL` 使用 3D 翻牌，`VERDICT` / `PUNISHMENT_*` / `ROUND_END` 使用静态正面公开牌。
+
+## V7.2 Future Work
+
+V7.2 开发前评估将模式差异抽取到 `mode-rules.ts`，但 `GameService` 仍保持唯一状态机。该评估只作为后续架构清理候选，不在 V7.1 RC 阶段实现。
+
+其他后续方向：
+
+- Party Expansion
+- Custom Rules
+- lightweight communication
+- stats / achievements
+- 更多道具、事件和角色能力
+
+## Guardrails
+
+- Classic、Quick、Escalation、Shared Revolver、Free Challenge 和 Party 是当前可开局模式。
+- V7 开关不等于新模式；它们只是扩展玩法入口。
+- 特殊模式一局只启用一种，不做自由叠加。
+- 新功能不得提前泄露隐藏信息。
+- 任何影响结果的逻辑必须在服务端完成。
+- 任何客户端动画或提示都不能成为推进游戏状态的依据。
+- 所有可变更房间规则都必须由房主在大厅阶段设置。

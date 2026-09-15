@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { MAX_PLAYERS, MIN_PLAYERS, type CharacterId, type PlayerView, type RoomMembership, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
+import { DEFAULT_V7_EXTENSION_SETTINGS, MAX_PLAYERS, MIN_PLAYERS, type CharacterId, type PlayerView, type RoomMembership, type RoomSettings, type RoomView } from '@bluff-tavern/shared';
 import { createRoomCode, type RandomIndex } from './room-code.js';
 
 interface InternalPlayer extends PlayerView { socketId: string; sessionToken: string }
@@ -22,7 +22,7 @@ export class RoomStore {
     const now = Date.now();
     this.rooms.set(code, {
       id: randomUUID(), code, hostPlayerId: player.id, status: 'LOBBY', maxPlayers: MAX_PLAYERS,
-      settings: { maxPlayers: MAX_PLAYERS, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null }, players: [player], createdAt: now,
+      settings: { maxPlayers: MAX_PLAYERS, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null, v7: { ...DEFAULT_V7_EXTENSION_SETTINGS } }, players: [player], createdAt: now,
     });
     return { room: this.getView(code), playerId: player.id, sessionToken: player.sessionToken };
   }
@@ -60,7 +60,7 @@ export class RoomStore {
     this.requireHost(room, hostPlayerId);
     if (room.status !== 'LOBBY') throw new RoomError('ROOM_NOT_CONFIGURABLE', '牌局已经开始');
     if (settings.maxPlayers < room.players.length) throw new RoomError('MAX_PLAYERS_TOO_LOW', '最大人数不能小于当前玩家数');
-    room.settings = { ...settings };
+    room.settings = { ...settings, v7: { ...settings.v7 } };
     room.maxPlayers = settings.maxPlayers;
     room.players.forEach((player) => { player.status = 'CONNECTED'; });
     return this.getView(code);
@@ -198,7 +198,7 @@ export class RoomStore {
     return {
       id: room.id, code: room.code, hostPlayerId: room.hostPlayerId, status: room.status,
       maxPlayers: room.maxPlayers, createdAt: room.createdAt,
-      settings: { ...room.settings },
+      settings: { ...room.settings, v7: { ...room.settings.v7 } },
       players: room.players.map((player) => this.toPlayerView(player)),
     };
   }

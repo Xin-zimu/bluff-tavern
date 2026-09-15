@@ -18,6 +18,9 @@ const failure = (error: unknown) => error instanceof RoomError
   : { ok: false as const, error: { code: 'SERVER_ERROR', message: '服务器暂时不可用' } };
 const processedRoomRequests = new Map<string, Ack<RoomView>>();
 const processedGameRequests = new Map<string, Ack<GameView>>();
+type V7SettingsPatch = {
+  [Key in keyof RoomView['settings']['v7']]?: RoomView['settings']['v7'][Key] | undefined;
+};
 
 export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: RoomStore, games: GameService, scheduler: GameScheduler, logger: AppLogger): void {
   let windowStartedAt = Date.now();
@@ -121,8 +124,13 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
     const cached = processedGameRequests.get(gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId));
     if (cached) return ack(cached);
     try {
-      games.useItem(parsed.data.roomCode, socket.data.playerId!);
-      throw new RoomError('FEATURE_DISABLED', 'V6.0 暂时关闭道具');
+      const state = games.useItem(parsed.data.roomCode, socket.data.playerId!, parsed.data.itemId);
+      const result = { ok: true as const, data: state };
+      processedGameRequests.set(gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId), result);
+      logger.info({ event: 'item_used', roomCode: parsed.data.roomCode, playerId: socket.data.playerId, itemId: parsed.data.itemId });
+      broadcastGameSnapshots(io, rooms, games, parsed.data.roomCode);
+      scheduleGame(io, rooms, games, scheduler, parsed.data.roomCode, logger);
+      ack(result);
     } catch (error) {
       const result = failure(error);
       processedGameRequests.set(gameRequestKey(parsed.data.roomCode, socket.data.playerId!, parsed.data.requestId), result);
@@ -141,9 +149,10 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       const room = rooms.updateSettings(parsed.data.roomCode, socket.data.playerId!, {
         maxPlayers: parsed.data.maxPlayers,
         gameMode: parsed.data.gameMode,
-        turnDurationSeconds: parsed.data.gameMode === 'QUICK' ? 7 : (parsed.data.turnDurationSeconds ?? previous.settings.turnDurationSeconds),
+        turnDurationSeconds: turnDurationForMode(parsed.data.gameMode, parsed.data.turnDurationSeconds ?? previous.settings.turnDurationSeconds),
         eventEnabled: false,
         bulletCount: null,
+        v7: mergeV7Settings(previous.settings.v7, parsed.data.v7, parsed.data.gameMode),
       });
       const result = { ok: true as const, data: room };
       processedRoomRequests.set(requestKey, result);
@@ -434,4 +443,21 @@ function gameRequestKey(roomCode: string, playerId: string, requestId: string): 
 
 function roomRequestKey(roomCode: string, playerId: string, requestId: string): string {
   return `${roomCode}:${playerId}:${requestId}`;
+}
+
+function mergeV7Settings(previous: RoomView['settings']['v7'], patch: V7SettingsPatch | undefined, gameMode: RoomView['settings']['gameMode']): RoomView['settings']['v7'] {
+  return {
+    itemsEnabled: patch?.itemsEnabled ?? previous.itemsEnabled,
+    tavernEventsEnabled: supportsLegacyTavernEvents(gameMode) ? patch?.tavernEventsEnabled ?? previous.tavernEventsEnabled : false,
+    characterAbilitiesEnabled: patch?.characterAbilitiesEnabled ?? previous.characterAbilitiesEnabled,
+  };
+}
+
+function supportsLegacyTavernEvents(gameMode: RoomView['settings']['gameMode']): boolean {
+  return gameMode === 'CLASSIC' || gameMode === 'QUICK';
+}
+
+function turnDurationForMode(gameMode: RoomView['settings']['gameMode'], requestedSeconds: number): number {
+  if (gameMode === 'QUICK') return 7;
+  return gameMode === 'CUSTOM' ? requestedSeconds : 15;
 }

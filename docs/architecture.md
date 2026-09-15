@@ -55,13 +55,27 @@ React screen
 
 7–8 人沿用同一权威状态机，但选取 40 张牌和两发实弹配置。客户端根据 viewer 的 playerId 对公开座位做相对排序，并将自己作为最后一个座位；八人网格将其跨两列放在底部中央，窄屏退化为一列。服务端仍按每位 viewer 单独发放 `GameView`，所以八人同步不会泄漏任何其他玩家的真实手牌。
 
-## V3.0 Party/Custom
+## V7.0 扩展开关
 
-`RoomSettings` 在大厅由房主权限保护，开局时复制到 `InternalGame`。Party（或启用事件的 Custom）会由可注入随机源在每轮选出公开事件：DRUNKEN 仅重排服务器手牌顺序、RAPID_NIGHT 缩短该轮权威时限、DOUBLE_DANGER 令下一次惩罚检查相邻弹巢。Custom 可设定 5–30 秒时限与 1–5 发实弹；客户端只能显示 `GameView.tavernEvent`，不能选择事件或裁决命中。
+`RoomSettings.v7` 在大厅由房主权限保护，开局时复制到 `InternalGame` 并在本局冻结。三个扩展开关分别控制道具、酒馆事件和角色能力，默认全部关闭；旧客户端不传 `settings.v7` 时，Socket 层按现有值合并，避免意外开启新玩法。
 
-## V3.5 内容系统
+## V7.0 内容系统
 
-角色选择在大厅由 `RoomStore` 校验唯一性，公开快照仅含 `characterId`。每局游戏为每名玩家建立独立道具 Set，`GameView.items` 只发送 viewer 自己的库存；`game:useItem` 必须带 requestId 并由 `GameService` 消耗。换牌手套在服务器重排该玩家真实手牌、蜡封在服务器抵消下一次命中、怀表推进当前回合。表情是纯公开、受枚举校验的实时事件，不带游戏裁决。
+角色选择在大厅由 `RoomStore` 校验唯一性，公开房间快照仅含 `characterId`。每局游戏为每名玩家建立独立道具库存，`GameView.items` 只发送 viewer 自己的库存；`game:useItem` 必须带 requestId 并由 `GameService` 消耗。V7.0 首批道具只开放望远镜、旧怀表和酒杯，不开放换别人牌、偷看别人牌或改写惩罚结果。
+
+酒馆事件只在 `tavernEventsEnabled` 开启时由服务器每轮小概率抽取，事件写入公开 `GameView.tavernEvent`。快速夜缩短本轮权威回合时间；烛火摇曳和双倍危机只改变演出时长和视觉压力，不改变诈唬判定或实弹数量。
+
+角色能力只在 `characterAbilitiesEnabled` 开启时触发，效果写入对应 viewer 的 `GameView.abilityEffect` 私有快照。V7.0 第一版只做私有提示、轻量回合延时和道具协同，不提供主动技能按钮、技能响应窗口、他人手牌窥视或惩罚抵消。
+
+## V7.1 多模式基础
+
+共享类型中的 `GameMode` 保留 Classic、Quick、Party、Free Challenge、Shared Revolver、Escalation 和 Custom 的完整路线；`PLAYABLE_GAME_MODES` 与 `updateRoomSettingsSchema` 当前开放 Classic、Quick、Escalation、Shared Revolver、Free Challenge 和 Party。Custom 仍保留为计划中模式，未开放模式无法通过 Socket 设置进入开局。
+
+所有 V7.1 模式继续复用同一个 `GameService` 服务器权威状态机。Escalation / 加注模式只在出牌校验处增加 `minimumPlayCount`：首手最低 1 张，之后等于上一手出牌数。若下一位玩家手牌数低于当前最低数，服务器把 `mustChallenge` 置为 true，并通过私有/公开快照统一驱动前端提示、按钮禁用和超时自动质疑。
+
+Free Challenge 把质疑权从“下一位玩家”扩展为 3 秒服务器权威窗口；Socket 层只接收质疑意图，`GameService` 只接受第一个合法 challenger，并保持 `phaseEndsAt` 不因重连或重复请求而重置。Shared Revolver 使用全桌共享左轮公开状态，但服务端继续隐藏 `bulletPosition`，客户端只看到 `currentChamber`、`shotsTaken` 等安全字段。Party 每轮抽取一个独立事件，事件状态进入权威快照；Party 不与 Shared Revolver、Free Challenge 或 Escalation 叠加，也不受旧 V7 tavern event switch 错误关闭。
+
+前端 `CinematicLayer` 只负责演出，不推进状态。V7.1.6 将质疑公开牌拆成两种表示：`REVEAL` 阶段使用 3D `.reveal-card` 逐张从背面翻到正面；`VERDICT`、`PUNISHMENT_INTRO`、`PUNISHMENT_TRIGGER`、`PUNISHMENT_RESULT` 和 `ROUND_END` 使用没有背面 DOM 的静态正面牌。`.reveal-card` 本体只承担 3D flip，真假牌强调放在正面伪元素或静态牌样式上，避免阶段交接和 finalHold 期间重新露出牌背。
 
 ## V4.0 表现层
 

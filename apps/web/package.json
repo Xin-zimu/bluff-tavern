@@ -1,6 +1,6 @@
 {
   "name": "@bluff-tavern/web",
-  "version": "6.7.0",
+  "version": "7.1.6",
   "private": true,
   "type": "module",
   "scripts": {

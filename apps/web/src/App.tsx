@@ -6,7 +6,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
-import type { RoomView, V6GameMode } from '@bluff-tavern/shared';
+import type { PlayableGameMode, RoomSettings, RoomView } from '@bluff-tavern/shared';
 
 type MotionPreference = 'system' | 'full' | 'reduced';
 
@@ -151,7 +151,7 @@ export function App() {
       if (!result.ok) state.setNotice(result.error.message);
     });
   };
-  const updateSettings = (settings: { maxPlayers: number; gameMode: V6GameMode; turnDurationSeconds: number; eventEnabled: boolean; bulletCount: number | null }) => {
+  const updateSettings = (settings: RoomSettings & { gameMode: PlayableGameMode }) => {
     if (!state.room) return;
     socket.emit('room:updateSettings', { roomCode: state.room.code, ...settings, requestId: requestId() }, (result) => {
       if (!result.ok) state.setNotice(result.error.message);
@@ -240,6 +240,6 @@ export function App() {
     {screen === 'game' && state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} audioMuted={audioMuted} lowPowerActive={lowPowerActive} reduceMotion={reduceMotion} onToggleAudio={() => setAudioMuted((value) => !value)} onToggleLowPower={() => setManualLowPower((value) => !value)} onToggleReduceMotion={() => setMotionPreference(() => reduceMotion ? 'full' : 'reduced')} onPlay={playCards} onChallenge={challenge} onReturnToRoom={returnToRoom} onLeaveRoom={leaveRoom} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V6.6 · 原创酒馆视觉 · 不含第三方游戏版权素材</footer>
+    <footer>V7.1.6 · 翻牌视觉修复 · Classic / Quick / Escalation / Shared Revolver / Free Challenge / Party</footer>
   </div></ErrorBoundary>;
 }

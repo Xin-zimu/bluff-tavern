@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { io as createClient, type Socket as ClientSocket } from 'socket.io-client';
-import type { Ack, ClientToServerEvents, GameView, RoomMembership, RoomView, ServerToClientEvents, SessionResumeResult } from '@bluff-tavern/shared';
+import type { Ack, ClientToServerEvents, GameView, PlayableGameMode, RoomMembership, RoomView, ServerToClientEvents, SessionResumeResult } from '@bluff-tavern/shared';
 import { createApp } from '../src/app.js';
 
 const clients: ClientSocket<ServerToClientEvents, ClientToServerEvents>[] = [];
@@ -16,16 +16,16 @@ function connect(url: string) {
   });
 }
 
-function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'game:start' | 'game:playCards' | 'game:challenge' | 'session:resume', payload: object) {
+function emitAck<T>(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, event: 'room:create' | 'room:join' | 'room:ready' | 'room:updateSettings' | 'room:kick' | 'room:selectCharacter' | 'game:start' | 'game:playCards' | 'game:challenge' | 'game:useItem' | 'session:resume', payload: object) {
   return new Promise<Ack<T>>((resolve) => client.emit(event, payload as never, resolve as never));
 }
 
-function waitForGameState(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, predicate: (state: GameView) => boolean) {
+function waitForGameState(client: ClientSocket<ServerToClientEvents, ClientToServerEvents>, predicate: (state: GameView) => boolean, timeoutMs = 6_000) {
   return new Promise<GameView>((resolve, reject) => {
     const timer = setTimeout(() => {
       client.off('game:snapshot', onState);
       reject(new Error('Timed out waiting for game state'));
-    }, 6_000);
+    }, timeoutMs);
     const onState = (state: GameView) => {
       if (!predicate(state)) return;
       clearTimeout(timer);
@@ -36,7 +36,90 @@ function waitForGameState(client: ClientSocket<ServerToClientEvents, ClientToSer
   });
 }
 
+const zeroRandom = { nextInt: () => 0 };
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function startSocketApp(random?: { nextInt(maxExclusive: number): number }) {
+  const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent', ...(random ? { random } : {}) });
+  await app.listen({ host: '127.0.0.1', port: 0 });
+  const address = app.server.address();
+  if (!address || typeof address === 'string') throw new Error('Missing address');
+  return { app, url: `http://127.0.0.1:${address.port}` };
+}
+
+async function createStartedSocketGame(url: string, playerCount: number, gameMode: PlayableGameMode) {
+  const host = await connect(url);
+  const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'A' });
+  if (!created.ok) throw new Error(created.error.message);
+  const peers = await Promise.all(Array.from({ length: playerCount - 1 }, async (_, index) => {
+    const peer = await connect(url);
+    const joined = await emitAck<RoomMembership>(peer, 'room:join', { nickname: String.fromCharCode(66 + index), roomCode: created.data.room.code });
+    if (!joined.ok) throw new Error(joined.error.message);
+    return { client: peer, membership: joined.data };
+  }));
+  const settings = await emitAck<RoomView>(host, 'room:updateSettings', {
+    roomCode: created.data.room.code,
+    maxPlayers: playerCount,
+    gameMode,
+    requestId: randomUUID(),
+  });
+  if (!settings.ok) throw new Error(settings.error.message);
+  const players = [{ client: host, membership: created.data }, ...peers];
+  await Promise.all(players.map(({ client }) => emitAck<RoomView>(client, 'room:ready', {
+    roomCode: created.data.room.code,
+    ready: true,
+    requestId: randomUUID(),
+  })));
+  const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+  if (!started.ok) throw new Error(started.error.message);
+  const turn = await waitForGameState(host, (state) => state.phase === 'TURN' && state.gameMode === gameMode);
+  const clientsByPlayer = new Map(players.map(({ client, membership }) => [membership.playerId, client] as const));
+  return { roomCode: created.data.room.code, players, clientsByPlayer, turn };
+}
+
+async function playOneCardIntoChallengeWindow(roomCode: string, turn: GameView, clientsByPlayer: Map<string, ClientSocket<ServerToClientEvents, ClientToServerEvents>>) {
+  if (!turn.turnPlayerId) throw new Error('Missing turn player');
+  const turnClient = clientsByPlayer.get(turn.turnPlayerId);
+  if (!turnClient) throw new Error('Missing turn client');
+  const played = await emitAck<GameView>(turnClient, 'game:playCards', {
+    roomCode,
+    cardIndexes: [0],
+    requestId: randomUUID(),
+  });
+  expect(played).toMatchObject({ ok: true, data: { phase: 'CHALLENGE_WINDOW', gameMode: 'FREE_CHALLENGE' } });
+  if (!played.ok) throw new Error(played.error.message);
+  return { windowState: played.data, playerId: turn.turnPlayerId, client: turnClient };
+}
+
 describe('real Socket.IO multiplayer', () => {
+  it('closes promptly while Socket.IO clients are still connected', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    let closePromise: Promise<void> | null = null;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'CloseCheck' });
+      expect(created.ok).toBe(true);
+
+      closePromise = app.close();
+      await expect(Promise.race([
+        closePromise.then(() => 'closed'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for app.close()')), 1_500)),
+      ])).resolves.toBe('closed');
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      if (closePromise) await closePromise.catch(() => undefined);
+      else await app.close().catch(() => undefined);
+    }
+  });
+
   it('synchronizes eight clients and restores a disconnected eighth seat', async () => {
     const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
     await app.listen({ host: '127.0.0.1', port: 0 });
@@ -57,7 +140,7 @@ describe('real Socket.IO multiplayer', () => {
       const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
       if (!started.ok) throw new Error(started.error.message);
       expect(started.data.players).toHaveLength(8);
-      expect(started.data.players.reduce((sum, player) => sum + player.cardCount, 0)).toBe(40);
+      expect(started.data.players.reduce((sum, player) => sum + (player.cardCount ?? 0), 0)).toBe(40);
       const last = joined[6]!;
       last.peer.disconnect();
       await new Promise((resolve) => setTimeout(resolve, 30));
@@ -90,7 +173,138 @@ describe('real Socket.IO multiplayer', () => {
       expect(started).toMatchObject({ ok: true, data: { gameMode: 'QUICK', turnDurationSeconds: 7 } });
       if (!started.ok) throw new Error('Game did not start');
       expect(started.data.players).toHaveLength(6);
-      expect(started.data.players.reduce((sum, player) => sum + player.cardCount, 0)).toBe(30);
+      expect(started.data.players.reduce((sum, player) => sum + (player.cardCount ?? 0), 0)).toBe(30);
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('starts and synchronizes a real Escalation mode turn', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'HostMode' });
+      if (!created.ok) throw new Error(created.error.message);
+      const guest = await connect(url);
+      const joined = await emitAck<RoomMembership>(guest, 'room:join', { nickname: 'GuestMode', roomCode: created.data.room.code });
+      if (!joined.ok) throw new Error(joined.error.message);
+      const settings = await emitAck<RoomView>(host, 'room:updateSettings', {
+        roomCode: created.data.room.code,
+        maxPlayers: 2,
+        gameMode: 'ESCALATION',
+        v7: { tavernEventsEnabled: true },
+        requestId: randomUUID(),
+      });
+      expect(settings).toMatchObject({ ok: true, data: { settings: { gameMode: 'ESCALATION', turnDurationSeconds: 15, v7: { tavernEventsEnabled: false } } } });
+      await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
+        roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
+      })));
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(started).toMatchObject({ ok: true, data: { gameMode: 'ESCALATION', minimumPlayCount: 1 } });
+      const turn = await waitForGameState(host, (state) => state.phase === 'TURN' && state.gameMode === 'ESCALATION');
+      if (!turn.turnPlayerId) throw new Error('Missing turn player');
+      const clientsByPlayer = new Map<string, ClientSocket<ServerToClientEvents, ClientToServerEvents>>([
+        [created.data.playerId, host],
+        [joined.data.playerId, guest],
+      ]);
+      const turnClient = clientsByPlayer.get(turn.turnPlayerId);
+      if (!turnClient) throw new Error('Missing turn client');
+
+      const played = await emitAck<GameView>(turnClient, 'game:playCards', {
+        roomCode: created.data.room.code,
+        cardIndexes: [0, 1],
+        requestId: randomUUID(),
+      });
+
+      expect(played).toMatchObject({ ok: true, data: { gameMode: 'ESCALATION', lastPlay: { count: 2 }, minimumPlayCount: 2 } });
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('uses a V7 item through the real Socket.IO flow', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'Host' });
+      if (!created.ok) throw new Error(created.error.message);
+      const guest = await connect(url);
+      const joined = await emitAck<RoomMembership>(guest, 'room:join', { nickname: 'Guest', roomCode: created.data.room.code });
+      if (!joined.ok) throw new Error(joined.error.message);
+      const settings = await emitAck<RoomView>(host, 'room:updateSettings', {
+        roomCode: created.data.room.code,
+        maxPlayers: 2,
+        gameMode: 'CLASSIC',
+        v7: { itemsEnabled: true },
+        requestId: randomUUID(),
+      });
+      expect(settings).toMatchObject({ ok: true, data: { settings: { v7: { itemsEnabled: true } } } });
+      await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
+        roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
+      })));
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+      expect(started.ok).toBe(true);
+      const turn = await waitForGameState(host, (state) => state.phase === 'TURN' && state.items.length === 1);
+      const item = turn.items[0];
+      if (!item) throw new Error('Missing V7 item');
+
+      const used = await emitAck<GameView>(host, 'game:useItem', { roomCode: created.data.room.code, itemId: item, requestId: randomUUID() });
+
+      expect(used).toMatchObject({ ok: true, data: { items: [] } });
+      if (!used.ok) throw new Error('Item use failed');
+      expect(used.data.itemEffect?.itemId).toBe(item);
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('starts a V7 character ability through the real Socket.IO flow', async () => {
+    const { app } = await createApp({ host: '127.0.0.1', port: 0, clientOrigin: '*', logLevel: 'silent' });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing address');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      const host = await connect(url);
+      const created = await emitAck<RoomMembership>(host, 'room:create', { nickname: 'Host' });
+      if (!created.ok) throw new Error(created.error.message);
+      const guest = await connect(url);
+      const joined = await emitAck<RoomMembership>(guest, 'room:join', { nickname: 'Guest', roomCode: created.data.room.code });
+      if (!joined.ok) throw new Error(joined.error.message);
+
+      const selected = await emitAck<RoomView>(host, 'room:selectCharacter', { roomCode: created.data.room.code, characterId: 'CAT' });
+      expect(selected.ok).toBe(true);
+      if (!selected.ok) throw new Error(selected.error.message);
+      expect(selected.data.players.find((player) => player.id === created.data.playerId)).toMatchObject({ characterId: 'CAT' });
+      const settings = await emitAck<RoomView>(host, 'room:updateSettings', {
+        roomCode: created.data.room.code,
+        maxPlayers: 2,
+        gameMode: 'CLASSIC',
+        v7: { characterAbilitiesEnabled: true },
+        requestId: randomUUID(),
+      });
+      expect(settings).toMatchObject({ ok: true, data: { settings: { v7: { characterAbilitiesEnabled: true } } } });
+      await Promise.all([host, guest].map((client) => emitAck<RoomView>(client, 'room:ready', {
+        roomCode: created.data.room.code, ready: true, requestId: randomUUID(),
+      })));
+
+      const started = await emitAck<GameView>(host, 'game:start', { roomCode: created.data.room.code, requestId: randomUUID() });
+
+      expect(started).toMatchObject({ ok: true, data: { abilityEffect: { characterId: 'CAT', abilityId: 'CAT_NIGHT_EYE', type: 'RISK_HINT' } } });
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;
@@ -289,6 +503,165 @@ describe('real Socket.IO multiplayer', () => {
       expect(trigger.punishment).toBeNull();
       const result = await waitForGameState(host, (state) => state.phase === 'PUNISHMENT_RESULT');
       expect(result.punishment?.hit).toEqual(expect.any(Boolean));
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('accepts only one concurrent Free Challenge challenger and broadcasts that challenger to every client', async () => {
+    const { app, url } = await startSocketApp();
+    try {
+      const { roomCode, players, clientsByPlayer, turn } = await createStartedSocketGame(url, 5, 'FREE_CHALLENGE');
+      const { windowState, playerId: challengedId } = await playOneCardIntoChallengeWindow(roomCode, turn, clientsByPlayer);
+      const challengerPlayers = players.filter(({ membership }) => membership.playerId !== challengedId);
+      const finalSnapshots = players.map(({ client }) => waitForGameState(client, (state) => state.phase === 'CHALLENGE_CALLOUT'));
+
+      const attempts = await Promise.all(challengerPlayers.map(({ client }) => emitAck<GameView>(client, 'game:challenge', {
+        roomCode,
+        requestId: randomUUID(),
+      })));
+
+      const successes = attempts.filter((attempt) => attempt.ok);
+      const failures = attempts.filter((attempt) => !attempt.ok);
+      expect(windowState.freeChallenge?.challengerId).toBeNull();
+      expect(successes).toHaveLength(1);
+      expect(failures).toHaveLength(challengerPlayers.length - 1);
+      expect(failures.every((attempt) => !attempt.ok && attempt.error.code === 'CHALLENGE_ALREADY_TAKEN')).toBe(true);
+      const challengerId = successes[0]!.data.challenge?.challengerId;
+      expect(challengerId).toBeTruthy();
+
+      const snapshots = await Promise.all(finalSnapshots);
+      expect(new Set(snapshots.map((snapshot) => snapshot.challenge?.challengerId))).toEqual(new Set([challengerId]));
+      expect(new Set(snapshots.map((snapshot) => snapshot.challenge?.challengedId))).toEqual(new Set([challengedId]));
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('keeps Free Challenge unique at the window closing boundary', async () => {
+    const { app, url } = await startSocketApp();
+    try {
+      const { roomCode, players, clientsByPlayer, turn } = await createStartedSocketGame(url, 4, 'FREE_CHALLENGE');
+      const { windowState, playerId: challengedId } = await playOneCardIntoChallengeWindow(roomCode, turn, clientsByPlayer);
+      const settledState = waitForGameState(players[0]!.client, (state) => state.phase !== 'CHALLENGE_WINDOW', 7_000);
+      await wait(Math.max(0, (windowState.phaseEndsAt ?? Date.now()) - Date.now() - 5));
+
+      const attempts = await Promise.all(players
+        .filter(({ membership }) => membership.playerId !== challengedId)
+        .map(({ client }) => emitAck<GameView>(client, 'game:challenge', { roomCode, requestId: randomUUID() })));
+
+      const successes = attempts.filter((attempt) => attempt.ok);
+      expect(successes.length).toBeLessThanOrEqual(1);
+      if (successes.length === 1) {
+        const challengerId = successes[0]!.data.challenge?.challengerId;
+        const settled = await settledState;
+        expect(settled.phase).toBe('CHALLENGE_CALLOUT');
+        expect(settled.challenge?.challengerId).toBe(challengerId);
+      } else {
+        expect(attempts.every((attempt) => !attempt.ok && attempt.error.code === 'CHALLENGE_WINDOW_CLOSED')).toBe(true);
+        const settled = await settledState;
+        expect(settled.phase).toBe('TURN');
+        expect(settled.freeChallenge).toBeNull();
+      }
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('returns to the next turn when nobody takes a Free Challenge window', async () => {
+    const { app, url } = await startSocketApp();
+    try {
+      const { roomCode, players, clientsByPlayer, turn } = await createStartedSocketGame(url, 3, 'FREE_CHALLENGE');
+      const { playerId: challengedId } = await playOneCardIntoChallengeWindow(roomCode, turn, clientsByPlayer);
+
+      const nextTurn = await waitForGameState(players[0]!.client, (state) => state.phase === 'TURN' && state.freeChallenge === null);
+      expect(nextTurn.turnPlayerId).not.toBe(challengedId);
+      const nextTurnClient = clientsByPlayer.get(nextTurn.turnPlayerId ?? '');
+      if (!nextTurnClient) throw new Error('Missing next turn client');
+
+      const staleChallenge = await emitAck<GameView>(nextTurnClient, 'game:challenge', { roomCode, requestId: randomUUID() });
+      expect(staleChallenge).toMatchObject({ ok: false, error: { code: 'CHALLENGE_WINDOW_CLOSED' } });
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('rejects the Free Challenge play owner challenging themself', async () => {
+    const { app, url } = await startSocketApp();
+    try {
+      const { roomCode, clientsByPlayer, turn } = await createStartedSocketGame(url, 3, 'FREE_CHALLENGE');
+      const { client: playOwnerClient } = await playOneCardIntoChallengeWindow(roomCode, turn, clientsByPlayer);
+
+      const selfChallenge = await emitAck<GameView>(playOwnerClient, 'game:challenge', { roomCode, requestId: randomUUID() });
+
+      expect(selfChallenge).toMatchObject({ ok: false, error: { code: 'CANNOT_CHALLENGE_SELF' } });
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  });
+
+  it('rejects an eliminated player trying to take a later Free Challenge window', async () => {
+    const { app, url } = await startSocketApp(zeroRandom);
+    try {
+      const { roomCode, players, clientsByPlayer, turn } = await createStartedSocketGame(url, 3, 'FREE_CHALLENGE');
+      const { playerId: challengedId } = await playOneCardIntoChallengeWindow(roomCode, turn, clientsByPlayer);
+      const firstChallenger = players.find(({ membership }) => membership.playerId !== challengedId);
+      if (!firstChallenger) throw new Error('Missing first challenger');
+      const challenged = await emitAck<GameView>(firstChallenger.client, 'game:challenge', { roomCode, requestId: randomUUID() });
+      expect(challenged.ok).toBe(true);
+
+      const punished = await waitForGameState(players[0]!.client, (state) => state.phase === 'PUNISHMENT_RESULT' && state.punishment?.eliminatedPlayerId !== null, 12_000);
+      const eliminatedPlayerId = punished.punishment?.eliminatedPlayerId;
+      if (!eliminatedPlayerId) throw new Error('Missing eliminated player');
+      const eliminatedClient = clientsByPlayer.get(eliminatedPlayerId);
+      if (!eliminatedClient) throw new Error('Missing eliminated client');
+
+      const nextTurn = await waitForGameState(players[0]!.client, (state) => state.phase === 'TURN' && !state.alivePlayerIds.includes(eliminatedPlayerId), 8_000);
+      await playOneCardIntoChallengeWindow(roomCode, nextTurn, clientsByPlayer);
+
+      const eliminatedChallenge = await emitAck<GameView>(eliminatedClient, 'game:challenge', { roomCode, requestId: randomUUID() });
+      expect(eliminatedChallenge).toMatchObject({ ok: false, error: { code: 'PLAYER_ELIMINATED' } });
+    } finally {
+      clients.forEach((client) => client.disconnect());
+      clients.length = 0;
+      await app.close();
+    }
+  }, 25_000);
+
+  it('does not reset the Free Challenge window when a player reconnects', async () => {
+    const { app, url } = await startSocketApp();
+    try {
+      const { roomCode, players, clientsByPlayer, turn } = await createStartedSocketGame(url, 4, 'FREE_CHALLENGE');
+      const { windowState, playerId: challengedId } = await playOneCardIntoChallengeWindow(roomCode, turn, clientsByPlayer);
+      const reconnecting = players.find(({ membership }) => membership.playerId !== challengedId);
+      if (!reconnecting) throw new Error('Missing reconnecting challenger');
+      const originalEndsAt = windowState.freeChallenge?.endsAt;
+      if (!originalEndsAt || !windowState.phaseEndsAt) throw new Error('Missing challenge deadline');
+
+      reconnecting.client.disconnect();
+      await wait(80);
+      const restored = await connect(url);
+      const resumed = await emitAck<SessionResumeResult>(restored, 'session:resume', { sessionToken: reconnecting.membership.sessionToken });
+      expect(resumed.ok).toBe(true);
+      if (!resumed.ok) throw new Error(resumed.error.message);
+      expect(resumed.data.game).toMatchObject({
+        phase: 'CHALLENGE_WINDOW',
+        phaseEndsAt: windowState.phaseEndsAt,
+        freeChallenge: { endsAt: originalEndsAt, challengerId: null },
+      });
+
+      const challenge = await emitAck<GameView>(restored, 'game:challenge', { roomCode, requestId: randomUUID() });
+      expect(challenge).toMatchObject({ ok: true, data: { phase: 'CHALLENGE_CALLOUT', challenge: { challengerId: reconnecting.membership.playerId, challengedId } } });
     } finally {
       clients.forEach((client) => client.disconnect());
       clients.length = 0;

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ROOM_CODE_ALPHABET } from '@bluff-tavern/shared';
 import { RoomStore } from '../src/rooms/room-store.js';
 
+const defaultV7 = { itemsEnabled: false, tavernEventsEnabled: false, characterAbilitiesEnabled: false };
+
 describe('RoomStore', () => {
   it('creates a six-character room and transfers host when creator leaves', () => {
     const store = new RoomStore(() => 0);
@@ -26,11 +28,13 @@ describe('RoomStore', () => {
     const host = store.create('狼', 'socket-a');
     const guest = store.join(host.room.code, '狐狸', 'socket-b');
     expect(store.setReady(host.room.code, guest.playerId, true).players[1]?.status).toBe('READY');
-    expect(() => store.updateSettings(host.room.code, guest.playerId, { maxPlayers: 2, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null })).toThrow('你不是房主');
-    expect(() => store.updateSettings(host.room.code, host.playerId, { maxPlayers: 1, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null })).toThrow('最大人数不能小于当前玩家数');
-    const updated = store.updateSettings(host.room.code, host.playerId, { maxPlayers: 4, gameMode: 'QUICK', turnDurationSeconds: 7, eventEnabled: false, bulletCount: null });
+    expect(host.room.settings.v7).toEqual(defaultV7);
+    expect(() => store.updateSettings(host.room.code, guest.playerId, { maxPlayers: 2, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null, v7: defaultV7 })).toThrow('你不是房主');
+    expect(() => store.updateSettings(host.room.code, host.playerId, { maxPlayers: 1, gameMode: 'CLASSIC', turnDurationSeconds: 15, eventEnabled: false, bulletCount: null, v7: defaultV7 })).toThrow('最大人数不能小于当前玩家数');
+    const updated = store.updateSettings(host.room.code, host.playerId, { maxPlayers: 4, gameMode: 'QUICK', turnDurationSeconds: 7, eventEnabled: false, bulletCount: null, v7: { ...defaultV7, itemsEnabled: true } });
     expect(updated.settings.maxPlayers).toBe(4);
     expect(updated.settings.gameMode).toBe('QUICK');
+    expect(updated.settings.v7).toMatchObject({ itemsEnabled: true, tavernEventsEnabled: false, characterAbilitiesEnabled: false });
     expect(updated.players.every((player) => player.status === 'CONNECTED')).toBe(true);
     expect(() => store.kick(host.room.code, guest.playerId, host.playerId)).toThrow('你不是房主');
     expect(store.kick(host.room.code, host.playerId, guest.playerId).room.players).toHaveLength(1);
