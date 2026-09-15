@@ -118,19 +118,44 @@ V7.0 角色能力第一版不做：
 - 偷看他人隐藏信息。
 - 抵消惩罚、改写命中结果或增加实弹。
 
-## V7.1: Balance And Content
+## V7.1: Multi-Mode Release Candidate
 
-V7.1 在多人实测后再扩展内容：
+V7.1.6 的正式可玩模式为：
 
-- 增加更多道具、事件和角色能力。
-- 增加规则说明和房间模式说明。
-- 优化移动端操作。
-- 根据实测数据调整概率、时间和次数限制。
+- Classic
+- Quick
+- Escalation
+- Shared Revolver
+- Free Challenge
+- Party
+
+Custom 仍为计划中模式，协议类型保留但不可在大厅开局。V7.1 的重点是“一局只选择一种特殊模式”，不把 Party、Shared Revolver、Free Challenge 和 Escalation 叠加成组合规则。
+
+当前 RC 边界：
+
+- `GameService` 仍是唯一服务器权威状态机。
+- Free Challenge 的 3 秒抢质疑窗口由服务器持有，真实 Socket.IO 多客户端并发测试覆盖“最多一个 challenger 成功”。
+- Shared Revolver 只公开安全的共享左轮状态，服务端继续隐藏 `bulletPosition`。
+- Party 每轮随机事件独立于旧 V7 tavern event switch。
+- V7.1.6 Reveal 结构保持稳定：`REVEAL` 使用 3D 翻牌，`VERDICT` / `PUNISHMENT_*` / `ROUND_END` 使用静态正面公开牌。
+
+## V7.2 Future Work
+
+V7.2 开发前评估将模式差异抽取到 `mode-rules.ts`，但 `GameService` 仍保持唯一状态机。该评估只作为后续架构清理候选，不在 V7.1 RC 阶段实现。
+
+其他后续方向：
+
+- Party Expansion
+- Custom Rules
+- lightweight communication
+- stats / achievements
+- 更多道具、事件和角色能力
 
 ## Guardrails
 
-- `CLASSIC` 和 `QUICK` 仍是当前可开局模式。
+- Classic、Quick、Escalation、Shared Revolver、Free Challenge 和 Party 是当前可开局模式。
 - V7 开关不等于新模式；它们只是扩展玩法入口。
+- 特殊模式一局只启用一种，不做自由叠加。
 - 新功能不得提前泄露隐藏信息。
 - 任何影响结果的逻辑必须在服务端完成。
 - 任何客户端动画或提示都不能成为推进游戏状态的依据。

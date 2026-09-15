@@ -1,6 +1,6 @@
 # 诡牌酒馆 / Bluff Tavern
 
-手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V7.1.6**：保留 2–8 人服务器权威诈唬核心循环和 V7.0 已有扩展，并开放 Classic、Quick、Escalation、Shared Revolver、Free Challenge 与 Party 模式。
+手机浏览器优先的原创多人诈唬派对游戏。当前版本为 **V7.1.6**：保留 2–8 人服务器权威诈唬核心循环和 V7.0 已有扩展，并开放 Classic、Quick、Escalation、Shared Revolver、Free Challenge 与 Party 模式；Custom 仍为计划中模式。
 
 ## 技术栈
 
@@ -60,4 +60,4 @@ docs/                     架构、协议与验收记录
 
 V1.0 提供最小 Nginx 与 systemd 模板：[`deploy/nginx/bluff-tavern.conf`](deploy/nginx/bluff-tavern.conf)、[`deploy/systemd/bluff-tavern.service`](deploy/systemd/bluff-tavern.service) 和 [`scripts/build-release.sh`](scripts/build-release.sh)。部署前必须替换示例域名并配置 HTTPS；具体步骤见 [`docs/deployment.md`](docs/deployment.md)。
 
-详见 [`Bluff_Tavern_V7.0_多模式扩展完整开发计划.md`](Bluff_Tavern_V7.0_多模式扩展完整开发计划.md)、[`docs/V7_PLAN.md`](docs/V7_PLAN.md)、[`docs/V7.0-acceptance.md`](docs/V7.0-acceptance.md)、[`docs/GAME_RULES_V6.md`](docs/GAME_RULES_V6.md)、[`docs/GAME_STATE_MACHINE_V6.md`](docs/GAME_STATE_MACHINE_V6.md)、[`docs/GAME_PROTOCOL_V6.md`](docs/GAME_PROTOCOL_V6.md)、[`docs/GAME_ANIMATION_V6.md`](docs/GAME_ANIMATION_V6.md) 与 [`docs/V6.6-acceptance.md`](docs/V6.6-acceptance.md)。
+详见 [`Bluff_Tavern_V7.1_多模式扩展完整开发计划.md`](Bluff_Tavern_V7.1_多模式扩展完整开发计划.md)、[`docs/V7_PLAN.md`](docs/V7_PLAN.md)、[`docs/V7.1-acceptance.md`](docs/V7.1-acceptance.md)、[`docs/V7.0-acceptance.md`](docs/V7.0-acceptance.md)、[`docs/GAME_RULES_V6.md`](docs/GAME_RULES_V6.md)、[`docs/GAME_STATE_MACHINE_V6.md`](docs/GAME_STATE_MACHINE_V6.md)、[`docs/GAME_PROTOCOL_V6.md`](docs/GAME_PROTOCOL_V6.md)、[`docs/GAME_ANIMATION_V6.md`](docs/GAME_ANIMATION_V6.md) 与 [`docs/V6.6-acceptance.md`](docs/V6.6-acceptance.md)。

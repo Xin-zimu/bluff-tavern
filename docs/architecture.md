@@ -69,9 +69,13 @@ React screen
 
 ## V7.1 多模式基础
 
-共享类型中的 `GameMode` 保留 Classic、Quick、Party、Free Challenge、Shared Revolver、Escalation 和 Custom 的完整路线，但 `PLAYABLE_GAME_MODES` 与 `updateRoomSettingsSchema` 只开放已经实现的 Classic、Quick 和 Escalation。大厅可以展示后续模式为计划中状态，但未开放模式无法通过 Socket 设置进入开局。
+共享类型中的 `GameMode` 保留 Classic、Quick、Party、Free Challenge、Shared Revolver、Escalation 和 Custom 的完整路线；`PLAYABLE_GAME_MODES` 与 `updateRoomSettingsSchema` 当前开放 Classic、Quick、Escalation、Shared Revolver、Free Challenge 和 Party。Custom 仍保留为计划中模式，未开放模式无法通过 Socket 设置进入开局。
 
-Escalation / 加注模式继续复用同一 `GameService` 状态机，只在出牌校验处增加 `minimumPlayCount`：首手最低 1 张，之后等于上一手出牌数。若下一位玩家手牌数低于当前最低数，服务器把 `mustChallenge` 置为 true，并通过私有/公开快照统一驱动前端提示、按钮禁用和超时自动质疑。
+所有 V7.1 模式继续复用同一个 `GameService` 服务器权威状态机。Escalation / 加注模式只在出牌校验处增加 `minimumPlayCount`：首手最低 1 张，之后等于上一手出牌数。若下一位玩家手牌数低于当前最低数，服务器把 `mustChallenge` 置为 true，并通过私有/公开快照统一驱动前端提示、按钮禁用和超时自动质疑。
+
+Free Challenge 把质疑权从“下一位玩家”扩展为 3 秒服务器权威窗口；Socket 层只接收质疑意图，`GameService` 只接受第一个合法 challenger，并保持 `phaseEndsAt` 不因重连或重复请求而重置。Shared Revolver 使用全桌共享左轮公开状态，但服务端继续隐藏 `bulletPosition`，客户端只看到 `currentChamber`、`shotsTaken` 等安全字段。Party 每轮抽取一个独立事件，事件状态进入权威快照；Party 不与 Shared Revolver、Free Challenge 或 Escalation 叠加，也不受旧 V7 tavern event switch 错误关闭。
+
+前端 `CinematicLayer` 只负责演出，不推进状态。V7.1.6 将质疑公开牌拆成两种表示：`REVEAL` 阶段使用 3D `.reveal-card` 逐张从背面翻到正面；`VERDICT`、`PUNISHMENT_INTRO`、`PUNISHMENT_TRIGGER`、`PUNISHMENT_RESULT` 和 `ROUND_END` 使用没有背面 DOM 的静态正面牌。`.reveal-card` 本体只承担 3D flip，真假牌强调放在正面伪元素或静态牌样式上，避免阶段交接和 finalHold 期间重新露出牌背。
 
 ## V4.0 表现层
 
