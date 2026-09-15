@@ -240,6 +240,6 @@ export function App() {
     {screen === 'game' && state.room && state.game ? <GameScreen room={state.room} game={state.game} playerId={state.playerId} audioMuted={audioMuted} lowPowerActive={lowPowerActive} reduceMotion={reduceMotion} onToggleAudio={() => setAudioMuted((value) => !value)} onToggleLowPower={() => setManualLowPower((value) => !value)} onToggleReduceMotion={() => setMotionPreference(() => reduceMotion ? 'full' : 'reduced')} onPlay={playCards} onChallenge={challenge} onReturnToRoom={returnToRoom} onLeaveRoom={leaveRoom} onFullscreen={fullscreen} onUseItem={useItem} onShare={shareResult} />
       : state.room ? <LobbyScreen room={state.room} playerId={state.playerId} onLeave={leaveRoom} onReady={sendReady} onSettingsChange={updateSettings} onKick={kickPlayer} onStart={startGame} onSelectCharacter={selectCharacter} />
       : <HomeScreen busy={busy || state.connection !== 'connected'} onCreate={createRoom} onJoin={joinRoom} />}
-    <footer>V7.1.2 · 事件叠加清理 · Classic / Quick / Escalation / Shared Revolver / Free Challenge / Party</footer>
+    <footer>V7.1.3 · 体验修复 · Classic / Quick / Escalation / Shared Revolver / Free Challenge / Party</footer>
   </div></ErrorBoundary>;
 }

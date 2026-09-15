@@ -5,6 +5,7 @@ import { RulesPanel } from '../components/RulesPanel';
 import { playGamePhaseSound } from '../audio/game-audio-manager';
 import { playUiTone } from '../audio/ui-sounds';
 import { CHARACTER_ART, ITEM_ART, ITEM_NAMES, characterImage } from '../art';
+import { getTablePileRevealedCards } from './game-table-pile';
 
 const GAME_MODE_NAMES: Record<GameView['gameMode'], string> = {
   CLASSIC: '经典',
@@ -144,21 +145,26 @@ function RoundTargetHud({ target, roundNumber }: { target: TargetRank; roundNumb
 }
 
 function TablePile({ game, lastPlayerName }: { game: GameView; lastPlayerName: string | undefined }) {
-  const pileCards = Math.max(game.lastPlay?.count ?? Math.min(game.discardCount, 3), game.discardCount > 0 ? 1 : 0);
+  const revealedCards = getTablePileRevealedCards(game);
+  const pileCards = revealedCards.length > 0 ? revealedCards.length : Math.max(game.lastPlay?.count ?? Math.min(game.discardCount, 3), game.discardCount > 0 ? 1 : 0);
   return <div className="table-pile" aria-label="公共牌区">
-    <div className="table-pile__cards" aria-hidden="true">
-      {pileCards > 0 ? Array.from({ length: Math.min(pileCards, 3) }, (_, index) => <span key={index} style={{ '--pile-index': index } as CSSProperties} />) : <em>等待出牌</em>}
+    <div className={`table-pile__cards${revealedCards.length > 0 ? ' table-pile__cards--revealed' : ''}`} aria-hidden="true">
+      {revealedCards.length > 0
+        ? revealedCards.map((rank, index) => <CardFace key={`${rank}-${index}`} rank={rank} className="table-pile__revealed-card" style={{ '--pile-index': index } as CSSProperties} />)
+        : pileCards > 0
+          ? Array.from({ length: Math.min(pileCards, 3) }, (_, index) => <span key={index} className="table-pile__card-back" style={{ '--pile-index': index } as CSSProperties} />)
+          : <em>等待出牌</em>}
     </div>
     <div className="table-pile__copy">
       <strong>公共牌区</strong>
       <p>{game.lastPlay ? `${lastPlayerName ?? '玩家'} 声明：${game.lastPlay.count} 张 ${game.lastPlay.claimedRank}` : '本轮尚未有人出牌'}</p>
-      <small>{game.lastPlay ? '当前可质疑对象' : `目标牌是 ${game.targetCard}`}</small>
+      <small>{revealedCards.length > 0 ? '已公开至本轮结束' : game.lastPlay ? '当前可质疑对象' : `目标牌是 ${game.targetCard}`}</small>
     </div>
   </div>;
 }
 
-function CardFace({ rank, size = 'normal' }: { rank: CardRank; size?: 'normal' | 'small' }) {
-  return <span className={`rank-card rank-card--${size} rank-card--${rank.toLowerCase()}`}>
+function CardFace({ rank, size = 'normal', className = '', style }: { rank: CardRank; size?: 'normal' | 'small'; className?: string; style?: CSSProperties }) {
+  return <span className={`rank-card rank-card--${size} rank-card--${rank.toLowerCase()}${className ? ` ${className}` : ''}`} style={style}>
     {rank === 'JOKER' ? <img src="/assets/cards/joker.png" alt="Joker" /> : <span>{rank}</span>}
   </span>;
 }

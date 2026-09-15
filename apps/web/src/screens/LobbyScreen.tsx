@@ -46,6 +46,7 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
   const isHost = room.hostPlayerId === playerId;
   const self = room.players.find((player) => player.id === playerId);
   const extensionSettings = room.settings.v7;
+  const abilitiesEnabled = extensionSettings.characterAbilitiesEnabled;
   const selectedMode = toPlayableMode(room.settings.gameMode);
   const updateMode = (gameMode: PlayableGameMode) => onSettingsChange({
     ...room.settings,
@@ -78,71 +79,90 @@ export function LobbyScreen({ room, playerId, onLeave, onReady, onSettingsChange
           {[2, 3, 4, 5, 6, 7, 8].map((count) => <option key={count} value={count} disabled={count < room.players.length}>{count} 人</option>)}
         </select>
       </label>}
-      <section className={`mode-selector${isHost ? '' : ' mode-selector--readonly'}`} aria-label="游戏模式">
-        {MODE_OPTIONS.map((mode) => {
-          const selected = selectedMode === mode.id;
-          const disabled = !isHost || !mode.enabled;
-          return <button
-            key={mode.id}
-            type="button"
-            className={selected ? 'selected' : ''}
-            disabled={disabled}
-            aria-pressed={selected}
-            onClick={() => { if (isPlayableMode(mode.id)) updateMode(mode.id); }}
-          >
-            <span className="mode-card__top"><strong>{mode.title}</strong><small>{mode.badge}</small></span>
-            <span>{mode.description}</span>
-          </button>;
-        })}
-      </section>
-      <div className={`feature-switches${isHost ? '' : ' feature-switches--readonly'}`} aria-label="V7 扩展玩法开关">
-        {V7_FEATURE_SWITCHES.map((feature) => {
-          const tavernSwitch = feature.key === 'tavernEventsEnabled';
-          const legacyEventsAllowed = supportsLegacyTavernEvents(selectedMode);
-          const lockedTavernSwitch = tavernSwitch && !legacyEventsAllowed;
-          const effectiveEnabled = tavernSwitch && selectedMode === 'PARTY' ? true : tavernSwitch && !legacyEventsAllowed ? false : extensionSettings[feature.key];
-          const status = tavernSwitch && selectedMode === 'PARTY'
-            ? 'Party 固定启用'
-            : tavernSwitch && !legacyEventsAllowed
-              ? '特殊模式不叠加'
-              : effectiveEnabled ? '已开启' : '关闭';
-          return <label className={`feature-switch${lockedTavernSwitch ? ' feature-switch--locked' : ''}`} key={feature.key}>
-            {isHost && !lockedTavernSwitch ? <>
-              <input type="checkbox" checked={extensionSettings[feature.key]} onChange={(event) => updateExtension(feature.key, event.target.checked)} />
-              <span className="feature-switch__toggle" aria-hidden="true" />
-            </> : <span className={`feature-switch__status${effectiveEnabled ? ' is-enabled' : ''}`} aria-hidden="true" />}
-            <span>{tavernSwitch && selectedMode === 'PARTY' ? '每轮随机事件' : feature.label}</span>
-            <small>{status}</small>
-          </label>;
-        })}
+      <div className="lobby-panel-grid">
+        <div className="lobby-rules-column">
+          <section className={`mode-selector${isHost ? '' : ' mode-selector--readonly'}`} aria-label="游戏模式">
+            {MODE_OPTIONS.map((mode) => {
+              const selected = selectedMode === mode.id;
+              const disabled = !isHost || !mode.enabled;
+              return <button
+                key={mode.id}
+                type="button"
+                className={selected ? 'selected' : ''}
+                disabled={disabled}
+                aria-pressed={selected}
+                onClick={() => { if (isPlayableMode(mode.id)) updateMode(mode.id); }}
+              >
+                <span className="mode-card__top"><strong>{mode.title}</strong><small>{mode.badge}</small></span>
+                <span>{mode.description}</span>
+              </button>;
+            })}
+          </section>
+          <div className={`feature-switches${isHost ? '' : ' feature-switches--readonly'}`} aria-label="V7 扩展玩法开关">
+            {V7_FEATURE_SWITCHES.map((feature) => {
+              const tavernSwitch = feature.key === 'tavernEventsEnabled';
+              const legacyEventsAllowed = supportsLegacyTavernEvents(selectedMode);
+              const lockedTavernSwitch = tavernSwitch && !legacyEventsAllowed;
+              const effectiveEnabled = tavernSwitch && selectedMode === 'PARTY' ? true : tavernSwitch && !legacyEventsAllowed ? false : extensionSettings[feature.key];
+              const status = tavernSwitch && selectedMode === 'PARTY'
+                ? 'Party 固定启用'
+                : tavernSwitch && !legacyEventsAllowed
+                  ? '特殊模式不叠加'
+                  : effectiveEnabled ? '已开启' : '关闭';
+              return <label className={`feature-switch${lockedTavernSwitch ? ' feature-switch--locked' : ''}`} key={feature.key}>
+                {isHost && !lockedTavernSwitch ? <>
+                  <input type="checkbox" checked={extensionSettings[feature.key]} onChange={(event) => updateExtension(feature.key, event.target.checked)} />
+                  <span className="feature-switch__toggle" aria-hidden="true" />
+                </> : <span className={`feature-switch__status${effectiveEnabled ? ' is-enabled' : ''}`} aria-hidden="true" />}
+                <span>{tavernSwitch && selectedMode === 'PARTY' ? '每轮随机事件' : feature.label}</span>
+                <small>{status}</small>
+              </label>;
+            })}
+          </div>
+        </div>
+        <div className="lobby-players-column">
+          <ul className="player-list">
+            {room.players.map((player) => <li key={player.id} className={player.id === playerId ? 'is-self' : ''}>
+              {player.characterId ? <div className="character-portrait character-portrait--small" aria-hidden="true"><img src={CHARACTER_ART[player.characterId].image} alt="" /></div>
+                : <div className="avatar" aria-hidden="true">{player.nickname.slice(0, 1).toUpperCase()}</div>}
+              <div><strong>{player.nickname}</strong><small>{formatLobbyPlayerStatus(player, playerId)}</small></div>
+              {player.status === 'READY' && <span className="ready-mark">准备</span>}
+              {player.id === room.hostPlayerId && <span className="host-mark">创建者</span>}
+              {isHost && player.id !== playerId && <button className="kick-button" onClick={() => onKick(player.id)}>移出</button>}
+            </li>)}
+          </ul>
+          {self && <div className={`character-picker${abilitiesEnabled ? '' : ' character-picker--visual-only'}`} aria-label="选择原创角色">{CHARACTER_IDS.map((character) => {
+            const selected = self.characterId === character;
+            const unavailable = room.players.some((player) => player.id !== playerId && player.characterId === character);
+            return <button key={character} type="button" disabled={unavailable} className={selected ? 'selected' : ''} aria-pressed={selected} onClick={() => onSelectCharacter(character)}>
+              <img src={CHARACTER_ART[character].image} alt="" loading="lazy" />
+              <span className="character-picker__copy">
+                <strong>{abilitiesEnabled ? `${CHARACTER_ART[character].name} · ${CHARACTER_ABILITIES[character].title}` : CHARACTER_ART[character].name}</strong>
+              </span>
+            </button>;
+          })}</div>}
+          {self?.characterId && <p className="ability-preview">
+            {abilitiesEnabled
+              ? <><strong>{`${CHARACTER_ART[self.characterId].name} · ${CHARACTER_ABILITIES[self.characterId].title}`}</strong>{CHARACTER_ABILITIES[self.characterId].description}</>
+              : <><strong>角色能力未启用</strong>本局角色仅作为玩家形象使用。</>}
+          </p>}
+        </div>
       </div>
-      <ul className="player-list">
-        {room.players.map((player) => <li key={player.id} className={player.id === playerId ? 'is-self' : ''}>
-          {player.characterId ? <div className="character-portrait character-portrait--small" aria-hidden="true"><img src={CHARACTER_ART[player.characterId].image} alt="" /></div>
-            : <div className="avatar" aria-hidden="true">{player.nickname.slice(0, 1).toUpperCase()}</div>}
-          <div><strong>{player.nickname}</strong><small>{player.id === playerId ? '你' : player.status === 'READY' ? '已准备' : '已连接'}</small></div>
-          {player.status === 'READY' && <span className="ready-mark">准备</span>}
-          {player.id === room.hostPlayerId && <span className="host-mark">创建者</span>}
-          {isHost && player.id !== playerId && <button className="kick-button" onClick={() => onKick(player.id)}>移出</button>}
-        </li>)}
-      </ul>
-      {self && <div className="character-picker" aria-label="选择原创角色">{CHARACTER_IDS.map((character) => {
-        const selected = self.characterId === character;
-        const unavailable = room.players.some((player) => player.id !== playerId && player.characterId === character);
-        return <button key={character} type="button" disabled={unavailable} className={selected ? 'selected' : ''} aria-pressed={selected} onClick={() => onSelectCharacter(character)}>
-          <img src={CHARACTER_ART[character].image} alt="" loading="lazy" />
-          <span className="character-picker__copy">
-            <strong>{CHARACTER_ART[character].name}</strong>
-            <small>{CHARACTER_ABILITIES[character].title}</small>
-          </span>
-        </button>;
-      })}</div>}
-      {self?.characterId && <p className="ability-preview"><strong>{CHARACTER_ABILITIES[self.characterId].title}</strong>{CHARACTER_ABILITIES[self.characterId].description}</p>}
-      {self && <button className={`button ${self.status === 'READY' ? 'button--secondary' : 'button--primary'}`} onClick={() => onReady(self.status !== 'READY')}>
-        {self.status === 'READY' ? '取消准备' : '准备就绪'}
-      </button>}
-      {isHost && <button className="button button--primary button--art-start" disabled={room.players.length < 2 || !room.players.every((player) => player.status === 'READY')} onClick={onStart}>开始牌局</button>}
+      <div className="lobby-actions">
+        {self && <button className={`button ${self.status === 'READY' ? 'button--secondary' : 'button--primary'}`} onClick={() => onReady(self.status !== 'READY')}>
+          {self.status === 'READY' ? '取消准备' : '准备就绪'}
+        </button>}
+        {isHost && <button className="button button--primary button--art-start" disabled={room.players.length < 2 || !room.players.every((player) => player.status === 'READY')} onClick={onStart}>开始牌局</button>}
+      </div>
       <p className="future-note">所有玩家准备后，由房主开始这局牌。</p>
     </section>
   </main>;
+}
+
+function formatLobbyPlayerStatus(player: RoomView['players'][number], selfId: string | null): string {
+  const labels = [];
+  if (player.id === selfId) labels.push('你');
+  labels.push(player.isConnected ? '在线' : '离线');
+  labels.push(player.status === 'READY' ? '已准备' : '未准备');
+  return labels.join(' · ');
 }

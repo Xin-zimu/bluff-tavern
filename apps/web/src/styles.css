@@ -44,8 +44,12 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .panel-title { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #4d3830; }
 .panel-title h2 { font-family: Georgia, "Songti SC", serif; }
 .panel-title span { color: #d4a85d; }
+.lobby-panel-grid { display: grid; gap: 14px; }
+.lobby-actions { display: grid; gap: 10px; }
 .player-list { list-style: none; padding: 0; margin: 14px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .player-list li { min-height: 64px; display: flex; align-items: center; gap: 11px; padding: 9px; border: 1px solid #49342b; background: rgba(0,0,0,.16); }
+.player-list li > div:not(.character-portrait):not(.avatar) { min-width: 0; }
+.player-list strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-list li.is-self { border-color: #a67c3d; }
 .player-list small { display: block; color: #81746b; margin-top: 3px; }
 .avatar { flex: 0 0 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: #5b1f28; border: 2px solid #a67c3d; font-family: Georgia, serif; }
@@ -91,6 +95,8 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .character-picker__copy { position: absolute; inset: auto 0 0; display: grid; gap: 1px; padding: 16px 3px 5px; background: linear-gradient(transparent, rgba(9,5,4,.96) 34%); }
 .character-picker__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; font-size: .75rem; line-height: 1.1; }
 .character-picker__copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a99b8d; font-size: .64rem; line-height: 1.1; }
+.character-picker--visual-only .character-picker__copy { padding-top: 18px; }
+.character-picker--visual-only .character-picker__copy strong { font-size: .8rem; }
 .character-picker button:hover:not(:disabled) img { transform: scale(1.06); }
 .character-picker button:disabled { filter: grayscale(.8); opacity: .38; cursor: not-allowed; }
 .character-picker .selected { border-color: #f2c777; color: #f2c777; box-shadow: inset 0 0 0 1px #a67c3d, 0 0 18px rgba(242,199,119,.2); }
@@ -108,6 +114,34 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
   .home { margin-top: 4vh; }.emblem { width: 180px; height: 98px; }.hero h1 { font-size: 3rem; }.tagline { font-size: .9rem; }
   .lobby { padding-top: 5px; }.lobby-header { text-align: center; }.lobby-header .button { width: 100%; }
   .player-panel { grid-column: 1; grid-row: auto; }.player-list { grid-template-columns: 1fr; }.mode-selector { grid-template-columns: repeat(2, minmax(0, 1fr)); }.character-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }.character-picker button { height: 108px; }.character-picker button img { height: 72px; }
+}
+@media (min-width: 1000px) {
+  .lobby { width: min(100%, 1180px); grid-template-columns: .72fr 1.58fr; gap: 24px; align-items: start; padding-top: 28px; }
+  .lobby-header { align-self: start; padding-top: 10px; }
+  .lobby-header h1 { font-size: clamp(3rem, 4.7vw, 4.2rem); }
+  .room-sign { min-height: 126px; padding: 20px 46px; }
+  .room-sign strong { font-size: clamp(2.4rem, 4.4vw, 3.2rem); }
+  .player-panel { padding: 22px; }
+  .player-panel .settings-control { margin: 10px 0 12px; }
+  .lobby-panel-grid { grid-template-columns: minmax(300px, .88fr) minmax(420px, 1.12fr); align-items: start; gap: 16px; }
+  .mode-selector { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 12px 0; }
+  .mode-selector button { min-height: 76px; gap: 5px; padding: 9px 10px; }
+  .mode-selector button > span:last-child { font-size: .68rem; line-height: 1.28; }
+  .feature-switches { gap: 6px; margin: 10px 0 0; padding: 10px; }
+  .feature-switch { min-height: 32px; gap: 8px; }
+  .player-list { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0; gap: 7px; }
+  .player-list li { min-height: 56px; padding: 7px; gap: 8px; }
+  .character-portrait--small { width: 44px; height: 44px; }
+  .avatar { flex-basis: 42px; height: 42px; }
+  .host-mark, .ready-mark { padding: 2px 4px; }
+  .kick-button { min-height: 30px; padding: 0 8px; }
+  .character-picker { gap: 7px; margin: 12px 0; }
+  .character-picker button { height: 104px; }
+  .character-picker button img { height: 72px; }
+  .ability-preview { margin: -2px 0 0; min-height: 34px; padding: 8px 10px; }
+  .lobby-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; margin-top: 14px; }
+  .lobby-actions .button { margin-top: 0; }
+  .player-panel > .future-note { margin: 8px 0 0; }
 }
 @media (max-height: 540px) and (orientation: landscape) {
   .app-shell { padding-top: max(44px, env(safe-area-inset-top)); }.home { grid-template-columns: .8fr 1.2fr; gap: 22px; }
@@ -137,6 +171,9 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .card span { position: relative; z-index: 1; text-shadow: 0 1px #fff6; }
 .card img { width: 100%; height: 100%; object-fit: cover; }
 .card.selected { box-shadow: inset 0 0 0 3px #6e4029, 0 16px 22px #000b, 0 0 16px rgba(242,199,119,.22); }
+.table-pile__cards--revealed { filter: drop-shadow(0 0 12px rgba(242,199,119,.1)); }
+.table-pile__cards .table-pile__revealed-card { position: absolute; display: inline-grid; place-items: center; width: 76px; aspect-ratio: 76 / 118; color: #5b1f28; background: linear-gradient(135deg,#f3ddad 0%,#b18b57 48%,#e8ddc8 100%); box-shadow: inset 0 0 0 3px #6e4029, 0 14px 22px rgba(0,0,0,.5), 0 0 16px rgba(242,199,119,.16); transform: translateX(calc((var(--pile-index) - 1) * 28px)) rotate(calc((var(--pile-index) - 1) * 7deg)); }
+.table-pile__cards .table-pile__revealed-card > span { position: relative; z-index: 1; width: auto; aspect-ratio: auto; border: 0; border-radius: 0; color: inherit; background: transparent; box-shadow: none; transform: none; }
 .mode-rule { width: fit-content; max-width: min(100%, 520px); min-height: 34px; display: grid; place-items: center; margin: 12px auto -8px; padding: 7px 14px; color: #ffd8d1; border: 1px solid rgba(143,61,57,.66); border-radius: 999px; background: rgba(91,31,40,.42); font-size: .82rem; font-weight: 850; }
 
 .button--art-start,
