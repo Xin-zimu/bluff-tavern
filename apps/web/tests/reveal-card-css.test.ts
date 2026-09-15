@@ -20,10 +20,47 @@ describe('reveal card CSS transform safety', () => {
     expect(ruleBody('.reveal-card.is-flipped')).toContain('rotateY(180deg)');
   });
 
-  it('does not animate or transform settled bluff cards', () => {
-    const body = ruleBody('.reveal-cards.is-settled .reveal-card.is-bluff');
+  it('keeps the animated reveal card body focused only on 3D flipping', () => {
+    const body = ruleBody('.reveal-card');
 
-    expect(body).toContain('filter:');
+    expect(body).toContain('transform-style: preserve-3d');
+    expect(body).toMatch(/\btransition:\s*transform\b/);
+    expect(body).not.toMatch(/\bfilter\s*:/);
+    expect(body).not.toMatch(/\banimation(?:-[\w-]+)?\s*:/);
+  });
+
+  it('does not style settled reveal card bodies with filter, transform, or animation', () => {
+    const settledRevealCardRules = [...css.matchAll(/([^{}]+)\{([^{}]+)\}/g)]
+      .filter((match) => (match[1] ?? '').includes('.reveal-cards.is-settled .reveal-card'))
+      .map((match) => ({
+        selector: (match[1] ?? '').trim(),
+        body: match[2] ?? '',
+      }));
+
+    expect(settledRevealCardRules).toEqual([]);
+
+    for (const rule of settledRevealCardRules) {
+      expect(rule.body, rule.selector).not.toMatch(/\bfilter\s*:/);
+      expect(rule.body, rule.selector).not.toMatch(/\btransform\s*:/);
+      expect(rule.body, rule.selector).not.toMatch(/\banimation(?:-[\w-]+)?\s*:/);
+    }
+  });
+
+  it('keeps settled visual emphasis on the front pseudo-element only', () => {
+    const honestBody = ruleBody('.reveal-card.is-honest.is-flipped .reveal-card__front::after');
+    const bluffBody = ruleBody('.reveal-card.is-bluff.is-flipped .reveal-card__front::after');
+
+    expect(honestBody).toContain('box-shadow:');
+    expect(bluffBody).toContain('box-shadow:');
+    expect(honestBody).not.toMatch(/\btransform\s*:/);
+    expect(bluffBody).not.toMatch(/\btransform\s*:/);
+    expect(honestBody).not.toMatch(/\banimation(?:-[\w-]+)?\s*:/);
+    expect(bluffBody).not.toMatch(/\banimation(?:-[\w-]+)?\s*:/);
+  });
+
+  it('does not animate or transform settled bluff cards', () => {
+    const body = ruleBody('.reveal-card.is-bluff.is-flipped .reveal-card__front::after');
+
     expect(body).not.toMatch(/\banimation(?:-[\w-]+)?\s*:/);
     expect(body).not.toMatch(/\btransform\s*:/);
   });

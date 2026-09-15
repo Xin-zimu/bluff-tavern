@@ -283,7 +283,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .cinematic--event-candle-flicker.cinematic--reveal .cinematic__panel { border-color: rgba(242,199,119,.78); box-shadow: 0 28px 80px #000c, 0 0 46px rgba(242,199,119,.2); }
 .cinematic--event-double-danger.cinematic--punishment_trigger .cinematic__panel { border-color: rgba(255,117,109,.72); box-shadow: 0 28px 80px #000c, 0 0 52px rgba(255,117,109,.24); }
 .reveal-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; perspective: 900px; }
-.reveal-card { position: relative; width: clamp(68px, 16vw, 98px); aspect-ratio: 76 / 118; transform: translateY(6px) rotateY(0) scale(.96); transform-style: preserve-3d; transition: transform .5s cubic-bezier(.2,.72,.18,1), filter .22s ease; transition-delay: calc(var(--card-index) * 90ms); }
+.reveal-card { position: relative; width: clamp(68px, 16vw, 98px); aspect-ratio: 76 / 118; transform: translateY(6px) rotateY(0) scale(.96); transform-style: preserve-3d; transition: transform .5s cubic-bezier(.2,.72,.18,1); transition-delay: calc(var(--card-index) * 90ms); }
 .reveal-card.is-flipped { transform: translateY(0) rotateY(180deg) scale(1); }
 .reveal-card__back,
 .reveal-card__front { position: absolute; inset: 0; display: grid; place-items: center; backface-visibility: hidden; border: 2px solid #a67c3d; border-radius: 7px; box-shadow: inset 0 0 0 3px #6e4029, 0 10px 18px #0009; font-family: Georgia, serif; font-size: clamp(1.35rem, 4.6vw, 2.4rem); font-weight: 900; transition: opacity .18s ease; }
@@ -293,8 +293,6 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .reveal-card__front::after { content: ''; position: absolute; inset: 8px; border-radius: 4px; opacity: 0; pointer-events: none; }
 .reveal-card.is-honest.is-flipped .reveal-card__front::after { opacity: 1; border: 1px solid rgba(242,199,119,.78); box-shadow: inset 0 0 18px rgba(242,199,119,.42), 0 0 14px rgba(242,199,119,.4); }
 .reveal-card.is-bluff.is-flipped .reveal-card__front::after { opacity: 1; border: 1px solid rgba(255,117,109,.78); box-shadow: inset 0 0 18px rgba(255,117,109,.38), 0 0 14px rgba(255,117,109,.35); }
-.reveal-cards.is-settled .reveal-card.is-bluff { filter: drop-shadow(0 0 14px rgba(255,117,109,.48)) drop-shadow(0 0 24px rgba(255,117,109,.18)); }
-.reveal-cards.is-settled .reveal-card.is-honest { filter: drop-shadow(0 0 12px rgba(242,199,119,.34)); }
 .static-reveal-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 0 0 2px; }
 .static-reveal-card { position: relative; width: clamp(52px, 9vw, 72px); aspect-ratio: 76 / 118; display: inline-grid; place-items: center; border: 2px solid #a67c3d; border-radius: 7px; color: #5b1f28; background: linear-gradient(135deg,#f3ddad 0%,#b18b57 48%,#e8ddc8 100%); box-shadow: inset 0 0 0 3px #6e4029, 0 10px 18px rgba(0,0,0,.48), 0 0 14px rgba(242,199,119,.12); overflow: hidden; font-family: Georgia, serif; font-size: clamp(1rem, 3vw, 1.55rem); font-weight: 900; transition: none; animation: none; }
 .static-reveal-card::after { content: ''; position: absolute; inset: 7px; border-radius: 4px; pointer-events: none; border: 1px solid rgba(242,199,119,.58); box-shadow: inset 0 0 14px rgba(242,199,119,.24); }

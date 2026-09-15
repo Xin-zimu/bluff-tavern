@@ -7,12 +7,13 @@
 ### Fixed
 
 - 将质疑翻牌收口为 `REVEAL` 动画牌与后续静态正面牌两套 DOM，避免 VERDICT / PUNISHMENT / ROUND_END 阶段继续复用 3D 翻牌结构。
+- 移除 `REVEAL` settled finalHold 期间作用在 3D `.reveal-card` 本体上的 filter，避免最后一张翻完后的等待阶段触发合成层回退。
 - 删除判定页无意义圆环，并收紧判定、左轮和回合结束电影层布局，恢复更集中、紧凑的舞台感。
 
 ### Tests
 
 - 增加电影层渲染测试，验证非 REVEAL 阶段没有翻牌背面 DOM，且只渲染静态正面公开牌。
-- 更新 CSS 回归测试，防止静态公开牌重新引入 flip / rotateY / transform 动画。
+- 更新 CSS 回归测试，防止静态公开牌重新引入 flip / rotateY / transform 动画，并禁止 settled reveal-card 本体重新获得 filter / transform / animation。
 
 ## [7.1.5] - 2026-09-15
 
