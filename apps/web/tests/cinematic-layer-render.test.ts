@@ -59,6 +59,7 @@ function game(phase: GamePhase, cards: CardRank[] | null = ['A', 'Q', 'JOKER']):
     turnPlayerId: 'p1',
     mustChallenge: false,
     minimumPlayCount: 1,
+    maximumPlayCount: 3,
     turnDirection: 'CLOCKWISE',
     players: [
       { playerId: 'p1', name: 'Alpha', seatIndex: 0, connected: true, alive: true, handCount: 2, cardCount: 2 },
@@ -84,6 +85,7 @@ function game(phase: GamePhase, cards: CardRank[] | null = ['A', 'Q', 'JOKER']):
     winnerId: null,
     summary: null,
     tavernEvent: null,
+    partyEventHistory: [],
     items: [],
     itemEffect: null,
     abilityEffect: null,

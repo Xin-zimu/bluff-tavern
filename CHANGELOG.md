@@ -2,6 +2,19 @@
 
 遵循 Keep a Changelog 风格记录项目阶段变化。
 
+## [7.2.0] - 2026-09-16
+
+### Added
+
+- 新增 Party Expansion 事件：单张夜、跟注夜、豪饮之夜、最后点单。
+- 新增服务端权威 `maximumPlayCount`、带权重 Party 事件抽取、最近两轮防重复和公开事件历史。
+- 新增 Party 回合事件开场、当前事件 HUD 文案、Lobby Party 详情和 RulesPanel 当前事件说明。
+
+### Changed
+
+- Party 快速夜固定为 5 秒；最后点单按成功出牌次数动态缩短回合时间。
+- 保持 V7.1 Reveal 结构：`REVEAL` 使用 3D 翻牌，后续判定/惩罚阶段使用静态正面牌。
+
 ## [7.1.6] - 2026-09-15
 
 ### Fixed

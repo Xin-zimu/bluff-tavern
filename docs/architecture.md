@@ -77,6 +77,12 @@ Free Challenge 把质疑权从“下一位玩家”扩展为 3 秒服务器权�
 
 前端 `CinematicLayer` 只负责演出，不推进状态。V7.1.6 将质疑公开牌拆成两种表示：`REVEAL` 阶段使用 3D `.reveal-card` 逐张从背面翻到正面；`VERDICT`、`PUNISHMENT_INTRO`、`PUNISHMENT_TRIGGER`、`PUNISHMENT_RESULT` 和 `ROUND_END` 使用没有背面 DOM 的静态正面牌。`.reveal-card` 本体只承担 3D flip，真假牌强调放在正面伪元素或静态牌样式上，避免阶段交接和 finalHold 期间重新露出牌背。
 
+## V7.2 Party 规则层
+
+`game/mode-rules.ts` 只回答有效出牌范围、回合时间、Joker 策略、质疑策略和左轮策略，不保存状态、不推进 Phase、不广播 Socket。`GameService` 仍是唯一服务器权威状态机，并持有 Party 本轮状态：`partyRequiredPlayCount`、`successfulPlayCountThisRound`、最近两轮事件和公开事件历史。
+
+V7.2 的 Party 事件一轮只启用一个。`minimumPlayCount` / `maximumPlayCount` 进入公开快照，前端据此禁用非法出牌，服务端在 `playCards()` 再次校验。LAST_CALL 的时间先由 Party 规则计算，再由角色能力和道具延长当前 `phaseEndsAt`。
+
 ## V4.0 表现层
 
 原创 `bg_01_tavern_v1.png` 同时保存于 `assets/backgrounds/` 和 Web public 资源目录，生产构建引用 `/assets/backgrounds/`，不会依赖生成工具临时路径。CSS 动画只作用于公开表现状态，不能改变游戏规则；低性能标记、`prefers-reduced-motion` 和窄屏背景固定关闭保证中端手机可降级。

@@ -69,6 +69,14 @@ function eventRules(game: GameView): Array<[string, string]> {
       return [['禁忌小丑', '本轮 Joker 不再视为目标牌；仍可打出，但质疑时会被判为假牌。']];
     case 'FORCED_BET':
       return [['强制豪赌', '本轮首手可出 1 至 3 张；从第二手开始每次至少出 2 张，手牌不足时必须质疑。']];
+    case 'ONE_CARD_ONLY':
+      return [['单张夜', '本轮每次只能出 1 张牌，超时也只会自动出 1 张。']];
+    case 'MATCH_BET':
+      return [['跟注夜', '本轮第一手决定张数，之后所有玩家必须出相同张数；手牌不足时必须质疑。']];
+    case 'HEAVY_HAND':
+      return [['豪饮之夜', '本轮从第一手开始每次至少出 2 张牌，最多仍为 3 张。']];
+    case 'LAST_CALL':
+      return [['最后点单', '本轮每完成一次出牌，下一位玩家行动时间缩短，最低为 6 秒。']];
     case 'CANDLE_FLICKER':
       return [['烛火摇曳', '本轮揭牌演出更紧张，核心判定不变。']];
     default:

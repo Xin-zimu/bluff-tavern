@@ -62,6 +62,8 @@ export function CinematicLayer({ game, room, now }: CinematicLayerProps) {
 }
 
 function RoundIntro({ game, progress }: { game: GameView; progress: number }) {
+  if (game.gameMode === 'PARTY' && game.tavernEvent) return <PartyEventIntro game={game} progress={progress} />;
+
   return <div className="round-intro">
     <h2>ROUND {game.roundNumber}</h2>
     <strong className={progress > 0.22 ? 'is-visible' : ''}>本轮目标</strong>
@@ -73,6 +75,16 @@ function RoundIntro({ game, progress }: { game: GameView; progress: number }) {
     <div className={progress > 0.45 ? 'deal-line is-dealing' : 'deal-line'} aria-hidden="true">
       {Array.from({ length: 5 }, (_, index) => <span key={index} />)}
     </div>
+  </div>;
+}
+
+function PartyEventIntro({ game, progress }: { game: GameView; progress: number }) {
+  const event = game.tavernEvent!;
+  return <div className="party-event-intro">
+    <p className={progress > 0.06 ? 'is-visible' : ''}>酒馆乱斗</p>
+    <h2 className={progress > 0.14 ? 'is-visible' : ''}>{event.title}</h2>
+    <strong className={progress > 0.24 ? 'is-visible' : ''}>{event.description}</strong>
+    <span className={progress > 0.34 ? 'is-visible' : ''}>第 {game.roundNumber} 轮 · 目标牌 {game.targetRank}</span>
   </div>;
 }
 

@@ -139,13 +139,20 @@ Custom 仍为计划中模式，协议类型保留但不可在大厅开局。V7.1
 - Party 每轮随机事件独立于旧 V7 tavern event switch。
 - V7.1.6 Reveal 结构保持稳定：`REVEAL` 使用 3D 翻牌，`VERDICT` / `PUNISHMENT_*` / `ROUND_END` 使用静态正面公开牌。
 
-## V7.2 Future Work
+## V7.2 Party Expansion
 
-V7.2 开发前评估将模式差异抽取到 `mode-rules.ts`，但 `GameService` 仍保持唯一状态机。该评估只作为后续架构清理候选，不在 V7.1 RC 阶段实现。
+V7.2 将模式差异抽取到 `mode-rules.ts`，但 `GameService` 仍保持唯一状态机。Party 不新增主模式，而是扩展为每轮一个公开事件的完整聚会模式。
+
+当前 V7.2 边界：
+
+- `GameSnapshot` 同时公开 `minimumPlayCount` 与 `maximumPlayCount`，客户端用于按钮限制和提示，服务端继续做最终校验。
+- Party 事件池包含 BLACKOUT、DRUNKEN、RAPID_NIGHT、DOUBLE_DANGER、NO_JOKER、FORCED_BET、ONE_CARD_ONLY、MATCH_BET、HEAVY_HAND、LAST_CALL。
+- Party 使用带权重随机抽取，并尽量排除最近两轮事件。
+- MATCH_BET 在本轮第一手后锁定固定出牌数；LAST_CALL 只在服务端接受一次正式出牌后缩短下一回合时间。
+- ROUND_START 展示 Party 事件开场，TURN 阶段继续显示当前事件 HUD；Reveal DOM 结构保持 V7.1.6 的保护边界。
 
 其他后续方向：
 
-- Party Expansion
 - Custom Rules
 - lightweight communication
 - stats / achievements

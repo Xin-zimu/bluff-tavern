@@ -25,13 +25,13 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const playedAudioSequence = useRef<number | null>(null);
   const isTurn = game.turnPlayerId === playerId && game.phase === 'TURN';
   const canPlay = isTurn && !game.mustChallenge;
-  const canSubmitPlay = canPlay && selected.length >= game.minimumPlayCount;
+  const canSubmitPlay = canPlay && selected.length >= game.minimumPlayCount && selected.length <= game.maximumPlayCount;
   const canFreeChallenge = game.phase === 'CHALLENGE_WINDOW' && game.lastPlay !== null && playerId !== null && game.alivePlayerIds.includes(playerId) && game.lastPlay.playerId !== playerId;
   const canChallenge = (isTurn && game.lastPlay !== null && game.gameMode !== 'FREE_CHALLENGE') || canFreeChallenge;
   const isGameOver = game.phase === 'GAME_OVER';
   const eventClass = game.tavernEvent ? ` game-screen--event-${game.tavernEvent.type.toLowerCase().replace('_', '-')}` : '';
   const modeCopy = `${GAME_MODE_NAMES[game.gameMode]} ${game.turnDurationSeconds} 秒`;
-  const turnInstruction = game.minimumPlayCount > 1 ? `你的回合：至少选择 ${game.minimumPlayCount} 张牌` : '你的回合：选择 1 至 3 张牌';
+  const turnInstruction = describeTurnInstruction(game);
   const players = useMemo(() => {
     const seated = room.players.map((player) => {
       const publicState = game.players.find((entry) => entry.playerId === player.id);
@@ -45,7 +45,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const lastPlayer = players.find((player) => player.id === game.lastPlay?.playerId);
   const statusCopy = describeMatchStatus(game, currentPlayer?.nickname, lastPlayer?.nickname);
   const hintCopy = !dismissedTip && !isGameOver ? describeNewPlayerHint(game, isTurn) : null;
-  const toggle = (index: number) => setSelected((current) => current.includes(index) ? current.filter((item) => item !== index) : current.length < 3 ? [...current, index] : current);
+  const toggle = (index: number) => setSelected((current) => current.includes(index) ? current.filter((item) => item !== index) : current.length < game.maximumPlayCount ? [...current, index] : current);
   const play = () => {
     if (!canSubmitPlay) return;
     if (!audioMuted) playUiTone(420);
@@ -88,7 +88,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
       <button type="button" aria-pressed={reduceMotion} onClick={onToggleReduceMotion}>{reduceMotion ? '动画少' : '动画全'}</button>
     </div>
     {hintCopy && <aside className="onboarding-tip" aria-live="polite"><p>{hintCopy}</p><button type="button" onClick={dismissTip}>知道了</button></aside>}
-    {game.tavernEvent && <TavernEventBanner event={game.tavernEvent} />}
+    {game.tavernEvent && <TavernEventBanner game={game} />}
     {!isGameOver && <div className="turn-banner" aria-live="polite">{isTurn ? (game.mustChallenge ? '你的回合：必须质疑上一手' : turnInstruction) : game.phase === 'CHALLENGE_WINDOW' ? '全民质疑窗口开启' : game.phase === 'TURN' ? `等待 ${currentPlayer?.nickname ?? '玩家'} 出牌` : statusCopy}</div>}
     {modeRuleCopy && <aside className="mode-rule" aria-live="polite">{modeRuleCopy}</aside>}
     <section className={`panel game-table${game.phase === 'PUNISHMENT_RESULT' && game.punishment?.hit ? ' game-table--elimination' : ''}${isGameOver ? ' game-table--victory' : ''}`}><div className="table-status"><span>{statusCopy}</span></div>
@@ -169,10 +169,12 @@ function CardFace({ rank, size = 'normal', className = '', style }: { rank: Card
   </span>;
 }
 
-function TavernEventBanner({ event }: { event: NonNullable<GameView['tavernEvent']> }) {
+function TavernEventBanner({ game }: { game: GameView }) {
+  const event = game.tavernEvent!;
+  const currentRule = describePartyEventRule(game, null);
   return <aside className={`tavern-event tavern-event--${event.type.toLowerCase().replace('_', '-')}`} aria-live="polite">
-    <strong>{event.title}</strong>
-    <span>{event.description}</span>
+    <div className="tavern-event__current"><strong>{event.title}</strong><span>{currentRule ?? event.description}</span></div>
+    {game.partyEventHistory.length > 1 && <small>{game.partyEventHistory.slice(-2, -1).map((entry) => `上一轮：${entry.title}`).join('')}</small>}
   </aside>;
 }
 
@@ -211,10 +213,41 @@ function formatCardCount(count: number | null): string {
 function describeModeRule(game: GameView, secondsLeft: number | null): string | null {
   if (game.phase === 'CHALLENGE_WINDOW') return `全民质疑：所有其他存活玩家可抢先质疑${secondsLeft !== null ? `，剩余 ${secondsLeft} 秒` : ''}`;
   if (game.gameMode === 'ESCALATION' && game.phase === 'TURN') return `加注模式：本次至少出 ${game.minimumPlayCount} 张`;
-  if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'NO_JOKER') return '禁忌小丑：Joker 本轮按假牌判定';
-  if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'FORCED_BET') return `强制豪赌：本次至少出 ${game.minimumPlayCount} 张`;
-  if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'DRUNKEN') return '醉酒之夜：本轮出牌方向反转';
+  if (game.gameMode === 'PARTY') return describePartyEventRule(game, secondsLeft);
   return null;
+}
+
+function describeTurnInstruction(game: GameView): string {
+  if (game.minimumPlayCount === game.maximumPlayCount) return `你的回合：请选择 ${game.minimumPlayCount} 张牌`;
+  if (game.minimumPlayCount > 1) return `你的回合：选择 ${game.minimumPlayCount} 至 ${game.maximumPlayCount} 张牌`;
+  return `你的回合：选择 1 至 ${game.maximumPlayCount} 张牌`;
+}
+
+function describePartyEventRule(game: GameView, secondsLeft: number | null): string | null {
+  switch (game.tavernEvent?.type) {
+    case 'ONE_CARD_ONLY':
+      return '单张夜：请选择 1 张';
+    case 'MATCH_BET':
+      return game.minimumPlayCount === game.maximumPlayCount ? `跟注夜：必须出 ${game.minimumPlayCount} 张` : '跟注夜：第一手决定张数';
+    case 'HEAVY_HAND':
+      return '豪饮之夜：至少出 2 张';
+    case 'LAST_CALL':
+      return `最后点单：本回合 ${game.turnDurationSeconds} 秒${secondsLeft !== null ? `，剩余 ${secondsLeft} 秒` : ''}`;
+    case 'NO_JOKER':
+      return '禁忌小丑：Joker 本轮按假牌判定';
+    case 'FORCED_BET':
+      return `强制豪赌：本次至少出 ${game.minimumPlayCount} 张`;
+    case 'DRUNKEN':
+      return '醉酒之夜：本轮出牌方向反转';
+    case 'RAPID_NIGHT':
+      return `快速夜：本轮每人 ${game.turnDurationSeconds} 秒`;
+    case 'DOUBLE_DANGER':
+      return '双倍危机：受罚者最多连续开两枪';
+    case 'BLACKOUT':
+      return '漆黑之夜：只能看到自己的准确手牌数';
+    default:
+      return null;
+  }
 }
 
 function describeItem(item: GameView['items'][number]): string {
@@ -236,6 +269,7 @@ function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPla
   if (game.phase === 'ROUND_START') return `第 ${game.roundNumber} 轮开始，目标牌 ${game.targetCard}`;
   if (game.phase === 'TURN') {
     if (game.mustChallenge) return `${currentPlayerName ?? '玩家'} 必须质疑上一手`;
+    if (game.minimumPlayCount === game.maximumPlayCount && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 必须出 ${game.minimumPlayCount} 张或质疑`;
     if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'FORCED_BET' && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 至少出 ${game.minimumPlayCount} 张或质疑`;
     if (game.gameMode === 'ESCALATION' && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 至少出 ${game.minimumPlayCount} 张或质疑`;
     if (game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，等待 ${currentPlayerName ?? '玩家'} 行动`;

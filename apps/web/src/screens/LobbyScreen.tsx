@@ -63,7 +63,7 @@ const MODE_OPTIONS: ModeOption[] = [
     title: '酒馆乱斗',
     badge: '新开放',
     description: '每轮一个随机酒馆事件。',
-    coreRules: '每轮开始抽取一个公开事件，例如反转方向、禁用 Joker 或双倍危机。',
+    coreRules: '每轮开始抽取一个公开事件，每轮只启用一个事件。事件池：漆黑之夜、醉酒之夜、快速夜、双倍危机、禁忌小丑、强制豪赌、单张夜、跟注夜、豪饮之夜、最后点单。',
     classicDifference: 'Classic 没有每轮随机事件；酒馆乱斗每轮只附加一个独立事件。',
     enabled: true,
   },

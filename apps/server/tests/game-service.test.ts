@@ -359,6 +359,112 @@ describe('V6 GameService rules', () => {
     expect(service.playCards(room.code, 'p2', [0, 1]).state.lastPlay).toMatchObject({ playerId: 'p2', count: 2 });
   });
 
+  it('enforces Party ONE_CARD_ONLY min and max rules including timeout', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'ONE_CARD_ONLY');
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q']);
+
+    expect(service.getView(room.code, 'p1')).toMatchObject({ minimumPlayCount: 1, maximumPlayCount: 1 });
+    expect(() => service.playCards(room.code, 'p1', [0, 1])).toThrow('必须选择 1 张牌');
+    expect(service.playCards(room.code, 'p1', [0]).state.lastPlay).toMatchObject({ count: 1 });
+
+    const timeoutRoom = makeRoom(2, 'DEF234', defaultV7, [], 'PARTY');
+    const timeoutService = deterministic();
+    startTurn(timeoutService, timeoutRoom);
+    timeoutService.debugSetTavernEvent(timeoutRoom.code, 'ONE_CARD_ONLY');
+    timeoutService.debugSetHand(timeoutRoom.code, 'p1', ['A', 'K', 'Q']);
+    expect(timeoutService.advancePhase(timeoutRoom.code).state.lastPlay).toMatchObject({ playerId: 'p1', count: 1 });
+  });
+
+  it('locks Party MATCH_BET to the opening play count and resets each round', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'MATCH_BET');
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q']);
+    service.debugSetHand(room.code, 'p2', ['A', 'K', 'Q']);
+
+    expect(service.getView(room.code, 'p1')).toMatchObject({ minimumPlayCount: 1, maximumPlayCount: 3 });
+    const opening = service.playCards(room.code, 'p1', [0, 1]).state;
+    expect(opening).toMatchObject({ minimumPlayCount: 2, maximumPlayCount: 2, turnPlayerId: 'p2' });
+    expect(() => service.playCards(room.code, 'p2', [0])).toThrow('至少选择 2 张牌');
+    expect(() => service.playCards(room.code, 'p2', [0, 1, 2])).toThrow('必须选择 2 张牌');
+    expect(service.playCards(room.code, 'p2', [0, 1]).state.lastPlay).toMatchObject({ playerId: 'p2', count: 2 });
+
+    const resetService = deterministic();
+    startTurn(resetService, room);
+    resetService.debugSetTavernEvent(room.code, 'MATCH_BET');
+    resetService.debugSetHand(room.code, 'p1', ['K']);
+    resetService.debugSetRevolver(room.code, 'p1', { chamberCount: 6, bulletPosition: 1, currentChamber: 0, shotsTaken: 0 });
+    resetService.playCards(room.code, 'p1', [0]);
+    resetService.challenge(room.code, 'p2');
+    advanceTo(resetService, room.code, 'ROUND_END');
+    const nextRound = resetService.advancePhase(room.code).state;
+    resetService.debugSetTavernEvent(room.code, 'MATCH_BET');
+    expect(nextRound.roundNumber).toBe(2);
+    expect(resetService.getView(room.code, 'p1')).toMatchObject({ minimumPlayCount: 1, maximumPlayCount: 3 });
+  });
+
+  it('forces Party MATCH_BET and HEAVY_HAND challenges when the next player lacks enough cards', () => {
+    const matchRoom = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const matchService = deterministic();
+    startTurn(matchService, matchRoom);
+    matchService.debugSetTavernEvent(matchRoom.code, 'MATCH_BET');
+    matchService.debugSetHand(matchRoom.code, 'p1', ['A', 'K', 'Q']);
+    matchService.debugSetHand(matchRoom.code, 'p2', ['A']);
+    expect(matchService.playCards(matchRoom.code, 'p1', [0, 1]).state).toMatchObject({ mustChallenge: true, minimumPlayCount: 2, maximumPlayCount: 2 });
+
+    const heavyRoom = makeRoom(2, 'DEF234', defaultV7, [], 'PARTY');
+    const heavyService = deterministic();
+    startTurn(heavyService, heavyRoom);
+    heavyService.debugSetTavernEvent(heavyRoom.code, 'HEAVY_HAND');
+    heavyService.debugSetHand(heavyRoom.code, 'p1', ['A', 'K', 'Q']);
+    heavyService.debugSetHand(heavyRoom.code, 'p2', ['A']);
+    expect(() => heavyService.playCards(heavyRoom.code, 'p1', [0])).toThrow('至少选择 2 张牌');
+    const played = heavyService.playCards(heavyRoom.code, 'p1', [0, 1]).state;
+    expect(played).toMatchObject({ mustChallenge: true, minimumPlayCount: 2, maximumPlayCount: 3 });
+  });
+
+  it('shortens Party LAST_CALL turn time after accepted plays only', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    const turn = startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'LAST_CALL');
+    expect(service.getView(room.code, 'p1').turnDurationSeconds).toBe(15);
+    expect((turn.phaseEndsAt ?? 0) - turn.phaseStartedAt).toBe(15_000);
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q']);
+    service.debugSetHand(room.code, 'p2', ['A', 'K', 'Q']);
+
+    const first = service.playCards(room.code, 'p1', [0]).state;
+    expect(first.turnDurationSeconds).toBe(12);
+    expect((first.phaseEndsAt ?? 0) - first.phaseStartedAt).toBe(12_000);
+    const second = service.playCards(room.code, 'p2', [0]).state;
+    expect(second.turnDurationSeconds).toBe(9);
+    const third = service.playCards(room.code, 'p1', [0]).state;
+    expect(third.turnDurationSeconds).toBe(6);
+
+    service.challenge(room.code, 'p2');
+    expect(advanceTo(service, room.code, 'VERDICT').turnDurationSeconds).toBe(6);
+  });
+
+  it('uses 5 seconds for Party RAPID_NIGHT and keeps recent party history public', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'RAPID_NIGHT');
+
+    const turn = service.getView(room.code, 'p1');
+
+    expect(turn.tavernEvent).toMatchObject({ type: 'RAPID_NIGHT', turnDurationSeconds: 5 });
+    expect(turn.turnDurationSeconds).toBe(5);
+
+    const randomService = new GameService({ nextInt: () => 0 });
+    const round = randomService.start(room);
+    expect(round.partyEventHistory).toEqual([{ roundNumber: 1, type: round.tavernEvent?.type, title: round.tavernEvent?.title }]);
+  });
+
   it('runs two punishment shots during Party DOUBLE_DANGER when the first is dry', () => {
     const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
     const service = deterministic();

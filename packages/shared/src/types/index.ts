@@ -4,7 +4,19 @@ export type PlayerStatus = 'CONNECTED' | 'DISCONNECTED' | 'READY' | 'PLAYING' | 
 export type GameMode = 'CLASSIC' | 'QUICK' | 'PARTY' | 'FREE_CHALLENGE' | 'SHARED_REVOLVER' | 'ESCALATION' | 'CUSTOM';
 export type V6GameMode = Extract<GameMode, 'CLASSIC' | 'QUICK'>;
 export type PlayableGameMode = Exclude<GameMode, 'CUSTOM'>;
-export type TavernEventType = 'BLACKOUT' | 'DRUNKEN' | 'RAPID_NIGHT' | 'CANDLE_FLICKER' | 'DOUBLE_DANGER' | 'NO_JOKER' | 'FORCED_BET';
+export type TavernEventType =
+  | 'BLACKOUT'
+  | 'DRUNKEN'
+  | 'RAPID_NIGHT'
+  | 'CANDLE_FLICKER'
+  | 'DOUBLE_DANGER'
+  | 'NO_JOKER'
+  | 'FORCED_BET'
+  | 'ONE_CARD_ONLY'
+  | 'MATCH_BET'
+  | 'HEAVY_HAND'
+  | 'LAST_CALL';
+export type PartyEventCategory = 'INFORMATION' | 'TURN_ORDER' | 'TEMPO' | 'CARD_RULE' | 'PUNISHMENT';
 export type CharacterId = 'WOLF' | 'FOX' | 'BEAR' | 'RABBIT' | 'CAT' | 'RACCOON' | 'FROG' | 'PANDA';
 export type ItemId = 'SPYGLASS' | 'SWAP_GLOVE' | 'WAX_SEAL' | 'TAVERN_MUG' | 'POCKET_WATCH';
 export type ActiveItemId = Extract<ItemId, 'SPYGLASS' | 'TAVERN_MUG' | 'POCKET_WATCH'>;
@@ -163,9 +175,16 @@ export interface PublicTavernEvent {
   type: TavernEventType;
   title: string;
   description: string;
+  category: PartyEventCategory | null;
   roundNumber: number;
   turnDurationSeconds: number | null;
   intensity: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+export interface PublicPartyEventHistoryEntry {
+  roundNumber: number;
+  type: TavernEventType;
+  title: string;
 }
 
 export interface PublicFreeChallengeWindow {
@@ -213,6 +232,7 @@ export interface GameSnapshot {
   turnPlayerId: string | null;
   mustChallenge: boolean;
   minimumPlayCount: number;
+  maximumPlayCount: number;
   turnDirection: 'CLOCKWISE' | 'COUNTERCLOCKWISE';
 
   players: PublicPlayerState[];
@@ -230,6 +250,7 @@ export interface GameSnapshot {
   summary: GameSummary | null;
 
   tavernEvent: PublicTavernEvent | null;
+  partyEventHistory: PublicPartyEventHistoryEntry[];
   items: ActiveItemId[];
   itemEffect: PrivateItemEffect | null;
   abilityEffect: PrivateAbilityEffect | null;
