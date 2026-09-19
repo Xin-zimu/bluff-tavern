@@ -270,7 +270,7 @@ describe('real Socket.IO multiplayer', () => {
       if (!played.ok) throw new Error(played.error.message);
       expect(played.data.lastPlay).toMatchObject({ playerId: actor.membership.playerId, count: 2 });
       expect(played.data.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: 3, cardCount: 3 });
-      expect(played.data.discardCount).toBe(2);
+      expect(played.data.discardCount).toBeNull();
       await expect(cardsPlayedEvent).resolves.toMatchObject({ playerId: actor.membership.playerId, count: null });
       await expect(cueEvent).resolves.not.toHaveProperty('count');
 
@@ -286,7 +286,7 @@ describe('real Socket.IO multiplayer', () => {
       if (resumedOther.ok) expect(resumedOther.data.game?.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: null, cardCount: null });
 
       const resumedActor = await emitAck<SessionResumeResult>(actor.client, 'session:resume', { sessionToken: actor.membership.sessionToken });
-      expect(resumedActor).toMatchObject({ ok: true, data: { game: { lastPlay: { count: 2 }, discardCount: 2 } } });
+      expect(resumedActor).toMatchObject({ ok: true, data: { game: { lastPlay: { count: 2 }, discardCount: null } } });
       if (resumedActor.ok) expect(resumedActor.data.game?.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: 3, cardCount: 3 });
 
       const challengerId = played.data.turnPlayerId;
@@ -300,7 +300,7 @@ describe('real Socket.IO multiplayer', () => {
       expect(revealedResume).toMatchObject({ ok: true, data: { game: { phase: 'REVEAL', lastPlay: { count: 2 } } } });
       if (revealedResume.ok) {
         expect(revealedResume.data.game?.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: null, cardCount: null });
-        expect(revealedResume.data.game?.discardCount).toBe(2);
+        expect(revealedResume.data.game?.discardCount).toBeNull();
       }
     } finally {
       await app.close();

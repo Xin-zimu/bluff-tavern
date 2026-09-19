@@ -588,7 +588,7 @@ export class GameService {
         };
       }),
       hand: [...hand],
-      discardCount: this.publicDiscardCount(game, viewerId),
+      discardCount: this.publicDiscardCount(game),
       lastPlay: game.lastPlay ? { playerId: game.lastPlay.playerId, count: this.publicLastPlayCount(game, viewerId), claimedRank: game.targetRank } : null,
       challenge,
       punishment: game.punishment ? { ...game.punishment } : null,
@@ -1275,12 +1275,11 @@ export class GameService {
       && viewerId !== playerId;
   }
 
-  private publicDiscardCount(game: InternalGame, viewerId: string): number | null {
-    if (game.gameMode !== 'PARTY' || game.tavernEvent?.type !== 'HIDDEN_BET') return game.discardCount;
-    if (!game.lastPlay) return game.discardCount;
-    if (viewerId === game.lastPlay.playerId) return game.discardCount;
-    if (['TURN', 'CHALLENGE_WINDOW', 'CHALLENGE_CALLOUT'].includes(game.phase)) return null;
-    return game.discardCount;
+  private publicDiscardCount(game: InternalGame): number | null {
+    // A cumulative total can expose earlier, unchallenged plays even to the current play owner.
+    return game.gameMode === 'PARTY' && game.tavernEvent?.type === 'HIDDEN_BET'
+      ? null
+      : game.discardCount;
   }
 
   private shouldPublishTavernEvent(game: InternalGame): boolean {

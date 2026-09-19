@@ -319,7 +319,7 @@ describe('V6 GameService rules', () => {
     expect(p1View.tavernEvent).toMatchObject({ type: 'HIDDEN_BET' });
     expect(p1View.players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: 3, cardCount: 3 });
     expect(p1View.lastPlay).toMatchObject({ playerId: 'p1', count: 2 });
-    expect(p1View.discardCount).toBe(2);
+    expect(p1View.discardCount).toBeNull();
   });
 
   it('hides other players hand counts, last play count, and discard delta before reveal during Party HIDDEN_BET', () => {
@@ -346,6 +346,7 @@ describe('V6 GameService rules', () => {
     classicService.debugSetHand(classicRoom.code, 'p1', ['A', 'K', 'Q']);
     classicService.playCards(classicRoom.code, 'p1', [0, 1]);
     expect(classicService.getView(classicRoom.code, 'p2').lastPlay).toMatchObject({ count: 2 });
+    expect(classicService.getView(classicRoom.code, 'p2').discardCount).toBe(2);
 
     const partyRoom = makeRoom(2, 'DEF234', defaultV7, [], 'PARTY');
     const partyService = deterministic();
@@ -354,6 +355,7 @@ describe('V6 GameService rules', () => {
     partyService.debugSetHand(partyRoom.code, 'p1', ['A', 'K', 'Q']);
     partyService.playCards(partyRoom.code, 'p1', [0, 1]);
     expect(partyService.getView(partyRoom.code, 'p2').lastPlay).toMatchObject({ count: 2 });
+    expect(partyService.getView(partyRoom.code, 'p2').discardCount).toBe(2);
 
     const hiddenRoom = makeRoom(2, 'GHI234', defaultV7, [], 'PARTY');
     const hiddenService = deterministic();
@@ -368,7 +370,37 @@ describe('V6 GameService rules', () => {
     expect(reveal.players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: 1, cardCount: 1 });
     expect(hiddenService.getView(hiddenRoom.code, 'p2').lastPlay).toMatchObject({ count: 2 });
     expect(hiddenService.getView(hiddenRoom.code, 'p2').players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: null, cardCount: null });
-    expect(hiddenService.getView(hiddenRoom.code, 'p2').discardCount).toBe(2);
+    expect(hiddenService.getView(hiddenRoom.code, 'p2').discardCount).toBeNull();
+  });
+
+  it('never exposes cumulative hidden bets after successive plays or a challenge', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'HIDDEN_BET');
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q', 'JOKER', 'A']);
+    service.debugSetHand(room.code, 'p2', ['A', 'K', 'Q', 'JOKER', 'A']);
+    const expectHiddenTotals = () => {
+      for (const viewerId of ['p1', 'p2', 'p3']) {
+        expect(service.getView(room.code, viewerId).discardCount).toBeNull();
+      }
+    };
+
+    expectHiddenTotals();
+    service.playCards(room.code, 'p1', [0, 1]);
+    expectHiddenTotals();
+    const played = service.playCards(room.code, 'p2', [0]);
+    expect(played.state.lastPlay).toMatchObject({ playerId: 'p2', count: 1 });
+    expect(played.state.discardCount).toBeNull();
+    expectHiddenTotals();
+    service.challenge(room.code, 'p3');
+    expectHiddenTotals();
+    advanceTo(service, room.code, 'REVEAL');
+    expectHiddenTotals();
+    expect(service.getView(room.code, 'p3').challenge?.revealedCards).toEqual(['A']);
+    expect(service.getView(room.code, 'p3').lastPlay).toMatchObject({ playerId: 'p2', count: 1 });
+    advanceTo(service, room.code, 'ROUND_END');
+    expectHiddenTotals();
   });
 
   it('keeps other players hand counts hidden through round end during Party HIDDEN_BET', () => {
@@ -401,6 +433,7 @@ describe('V6 GameService rules', () => {
 
     const nextRound = service.getView(room.code, 'p2');
     expect(nextRound.phase).toBe('ROUND_START');
+    expect(nextRound.discardCount).toBe(0);
     expect(nextRound.tavernEvent).toMatchObject({ type: 'DRUNKEN' });
     expect(nextRound.players.find((player) => player.playerId === 'p3')).toMatchObject({ handCount: 5, cardCount: 5 });
   });
