@@ -5,6 +5,7 @@ import { socket } from './socket/client';
 import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
+import { canSendAuthoritativeResync, isPhaseTimeoutResyncDue } from './stores/game-resync';
 import { useSessionStore } from './stores/session-store';
 import type { Ack, GameView, PlayableGameMode, RoomSettings, RoomView, SessionResumeResult } from '@bluff-tavern/shared';
 
@@ -60,7 +61,6 @@ export function App() {
   const [systemReducedMotion, setSystemReducedMotion] = useState(() => readSystemReducedMotion());
   const recordedSummary = useRef<string | null>(null);
   const lastSnapshotRef = useRef({ sequence: state.game?.sequence ?? -1, localReceivedAt: Date.now(), serverNow: state.game?.serverNow ?? Date.now() });
-  const resyncedSequences = useRef(new Set<number>());
   const lastResyncAt = useRef(0);
   const applyResumeResult = useCallback((result: Ack<SessionResumeResult>, source: string) => {
     const current = useSessionStore.getState();
@@ -72,13 +72,20 @@ export function App() {
       current.setNotice(result.error.message);
     }
   }, []);
-  const requestAuthoritativeResync = useCallback((reason: string) => {
+  const requestAuthoritativeResync = useCallback((reason: string): boolean => {
     const sessionToken = localStorage.getItem('bluff-tavern.session-token');
-    if (!sessionToken || !socket.connected) return;
+    if (!sessionToken) return false;
     const now = Date.now();
-    if (now - lastResyncAt.current < RESYNC_THROTTLE_MS) return;
+    if (!canSendAuthoritativeResync({
+      hasSessionToken: true,
+      socketConnected: socket.connected,
+      now,
+      lastResyncAt: lastResyncAt.current,
+      throttleMs: RESYNC_THROTTLE_MS,
+    })) return false;
     lastResyncAt.current = now;
     socket.emit('session:resume', { sessionToken }, (result) => applyResumeResult(result, `resync:${reason}`));
+    return true;
   }, [applyResumeResult]);
   const handleSyncError = useCallback((code: string) => {
     if (SYNC_ERROR_CODES.has(code)) requestAuthoritativeResync(`action-error:${code}`);
@@ -118,12 +125,8 @@ export function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const game = useSessionStore.getState().game;
-      if (!game?.phaseEndsAt) return;
-      if (resyncedSequences.current.has(game.sequence)) return;
       const timing = lastSnapshotRef.current;
-      const estimatedServerNow = timing.serverNow + (Date.now() - timing.localReceivedAt);
-      if (estimatedServerNow <= game.phaseEndsAt + RESYNC_GRACE_MS) return;
-      resyncedSequences.current.add(game.sequence);
+      if (!isPhaseTimeoutResyncDue({ game, timing, now: Date.now(), graceMs: RESYNC_GRACE_MS })) return;
       requestAuthoritativeResync('phase-timeout');
     }, 500);
     return () => window.clearInterval(timer);
