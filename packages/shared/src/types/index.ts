@@ -5,7 +5,7 @@ export type GameMode = 'CLASSIC' | 'QUICK' | 'PARTY' | 'FREE_CHALLENGE' | 'SHARE
 export type V6GameMode = Extract<GameMode, 'CLASSIC' | 'QUICK'>;
 export type PlayableGameMode = Exclude<GameMode, 'CUSTOM'>;
 export type TavernEventType =
-  | 'BLACKOUT'
+  | 'HIDDEN_BET'
   | 'DRUNKEN'
   | 'RAPID_NIGHT'
   | 'CANDLE_FLICKER'
@@ -135,7 +135,7 @@ export interface PublicPlayerState {
 
 export interface PublicLastPlay {
   playerId: string;
-  count: number;
+  count: number | null;
   claimedRank: TargetRank;
 }
 

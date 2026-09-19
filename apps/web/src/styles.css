@@ -226,7 +226,7 @@ footer { text-align: center; color: #6e625b; font-size: .7rem; margin-top: auto;
 .hand--no-joker .card--joker { filter: grayscale(.75) brightness(.72); }
 .hand--no-joker .card--joker::after { content: '禁'; position: absolute; inset: auto 6px 6px auto; width: 24px; height: 24px; display: grid; place-items: center; color: #ffe1a1; border-radius: 50%; background: #7a2632; font-size: .72rem; font-family: "PingFang SC", sans-serif; box-shadow: 0 0 0 1px #f2c777; }
 .game-screen--event-rapid-night .phase-clock { background: #ff756d; color: #fff7ec; }
-.game-screen--event-blackout .game-players li:not(.self-seat) .seat-copy small { color: #8b8178; }
+.game-screen--event-hidden-bet .table-pile__copy small { color: #d4a85d; }
 .game-screen--event-drunken .turn-banner { border-color: rgba(129,176,181,.62); background: linear-gradient(90deg, rgba(27,63,67,.22), rgba(166,124,61,.18), rgba(91,31,40,.18)); }
 .game-screen--event-no-joker .mode-rule, .game-screen--event-forced-bet .mode-rule { border-color: rgba(255,117,109,.66); }
 .game-screen--event-one-card-only .mode-rule, .game-screen--event-match-bet .mode-rule, .game-screen--event-heavy-hand .mode-rule { border-color: rgba(242,199,119,.66); }

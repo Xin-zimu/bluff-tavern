@@ -26,7 +26,7 @@
 - `room:playerJoined` / `room:playerLeft`：增量入席与离开事件。
 - `room:kicked`：仅发给被房主移出的客户端。
 - `game:state` / `game:turnStarted`：按接收玩家过滤的状态，包含其自己的手牌与所有玩家手牌数。
-- `game:cardsPlayed`：仅包含出牌者与数量，不含真实牌面。
+- `game:cardsPlayed`：仅包含出牌者与公开数量，不含真实牌面；暗注夜翻牌前数量为 `null`。
 - `game:challengeStarted` / `game:challengeResult`：服务器统一广播质疑者、失败者和翻开的上一手牌。
 - `game:punishmentStarted` / `game:punishmentResult` / `game:playerEliminated` / `game:over`：轮盘、淘汰和胜负事件。
 

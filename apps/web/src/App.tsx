@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConnectionBadge } from './components/ConnectionBadge';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { socket } from './socket/client';
@@ -6,9 +6,12 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { GameScreen } from './screens/GameScreen';
 import { useSessionStore } from './stores/session-store';
-import type { PlayableGameMode, RoomSettings, RoomView } from '@bluff-tavern/shared';
+import type { Ack, GameView, PlayableGameMode, RoomSettings, RoomView, SessionResumeResult } from '@bluff-tavern/shared';
 
 type MotionPreference = 'system' | 'full' | 'reduced';
+const RESYNC_GRACE_MS = 2_000;
+const RESYNC_THROTTLE_MS = 4_000;
+const SYNC_ERROR_CODES = new Set(['NOT_YOUR_TURN', 'PHASE_LOCKED', 'MUST_CHALLENGE', 'CHALLENGE_WINDOW_CLOSED']);
 
 function readBooleanPreference(key: string): boolean {
   return localStorage.getItem(key) === 'true';
@@ -56,6 +59,38 @@ export function App() {
   const [motionPreference, setMotionPreference] = useState<MotionPreference>(() => readMotionPreference());
   const [systemReducedMotion, setSystemReducedMotion] = useState(() => readSystemReducedMotion());
   const recordedSummary = useRef<string | null>(null);
+  const lastSnapshotRef = useRef({ sequence: state.game?.sequence ?? -1, localReceivedAt: Date.now(), serverNow: state.game?.serverNow ?? Date.now() });
+  const resyncedSequences = useRef(new Set<number>());
+  const lastResyncAt = useRef(0);
+  const applyResumeResult = useCallback((result: Ack<SessionResumeResult>, source: string) => {
+    const current = useSessionStore.getState();
+    if (result.ok) {
+      current.enterRoom(result.data.room, result.data.playerId, result.data.sessionToken);
+      if (result.data.game) current.setGame(result.data.game, source);
+      else current.clearGame();
+    } else {
+      current.setNotice(result.error.message);
+    }
+  }, []);
+  const requestAuthoritativeResync = useCallback((reason: string) => {
+    const sessionToken = localStorage.getItem('bluff-tavern.session-token');
+    if (!sessionToken || !socket.connected) return;
+    const now = Date.now();
+    if (now - lastResyncAt.current < RESYNC_THROTTLE_MS) return;
+    lastResyncAt.current = now;
+    socket.emit('session:resume', { sessionToken }, (result) => applyResumeResult(result, `resync:${reason}`));
+  }, [applyResumeResult]);
+  const handleSyncError = useCallback((code: string) => {
+    if (SYNC_ERROR_CODES.has(code)) requestAuthoritativeResync(`action-error:${code}`);
+  }, [requestAuthoritativeResync]);
+  const handleGameAck = useCallback((result: Ack<GameView>, source: string) => {
+    if (result.ok) {
+      setGame(result.data, source);
+      return;
+    }
+    state.setNotice(result.error.message);
+    handleSyncError(result.error.code);
+  }, [handleSyncError, setGame, state]);
   useEffect(() => localStorage.setItem('bluff-tavern.audio-muted', String(audioMuted)), [audioMuted]);
   useEffect(() => localStorage.setItem('bluff-tavern.low-power', String(manualLowPower)), [manualLowPower]);
   useEffect(() => localStorage.setItem('bluff-tavern.motion-preference', motionPreference), [motionPreference]);
@@ -77,16 +112,34 @@ export function App() {
     localStorage.setItem('bluff-tavern.local-stats', JSON.stringify(next));
   }, [state.game, state.playerId]);
   useEffect(() => {
+    if (!state.game) return;
+    lastSnapshotRef.current = { sequence: state.game.sequence, localReceivedAt: Date.now(), serverNow: state.game.serverNow };
+  }, [state.game]);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const game = useSessionStore.getState().game;
+      if (!game?.phaseEndsAt) return;
+      if (resyncedSequences.current.has(game.sequence)) return;
+      const timing = lastSnapshotRef.current;
+      const estimatedServerNow = timing.serverNow + (Date.now() - timing.localReceivedAt);
+      if (estimatedServerNow <= game.phaseEndsAt + RESYNC_GRACE_MS) return;
+      resyncedSequences.current.add(game.sequence);
+      requestAuthoritativeResync('phase-timeout');
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [requestAuthoritativeResync]);
+  useEffect(() => {
     const resumeStoredSession = () => {
       const sessionToken = localStorage.getItem('bluff-tavern.session-token');
       if (!sessionToken) return;
       socket.emit('session:resume', { sessionToken }, (result) => {
-        const current = useSessionStore.getState();
         if (result.ok) {
+          const current = useSessionStore.getState();
           current.enterRoom(result.data.room, result.data.playerId, result.data.sessionToken);
-          if (result.data.game) current.setGame(result.data.game);
+          if (result.data.game) current.setGame(result.data.game, 'session:resume');
           else current.clearGame();
         } else {
+          const current = useSessionStore.getState();
           localStorage.removeItem('bluff-tavern.session-token');
           current.leaveRoom();
           current.setNotice(result.error.message);
@@ -117,12 +170,15 @@ export function App() {
       updateRoom(room);
       if (room.status === 'LOBBY') clearGame();
     };
-    socket.on('connect', connected).on('disconnect', disconnected).on('room:state', roomState).on('room:closed', closeRoom).on('room:kicked', kicked).on('session:replaced', replaced).on('game:snapshot', setGame).on('game:state', setGame).on('game:turnStarted', setGame);
+    const gameSnapshot = (game: GameView) => setGame(game, 'game:snapshot');
+    const gameState = (game: GameView) => setGame(game, 'game:state');
+    const gameTurnStarted = (game: GameView) => setGame(game, 'game:turnStarted');
+    socket.on('connect', connected).on('disconnect', disconnected).on('room:state', roomState).on('room:closed', closeRoom).on('room:kicked', kicked).on('session:replaced', replaced).on('game:snapshot', gameSnapshot).on('game:state', gameState).on('game:turnStarted', gameTurnStarted);
     window.addEventListener('online', online);
     window.addEventListener('offline', offline);
     document.addEventListener('visibilitychange', visibilityChange);
     socket.connect();
-    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', roomState).off('room:closed', closeRoom).off('room:kicked', kicked).off('session:replaced', replaced).off('game:snapshot', setGame).off('game:state', setGame).off('game:turnStarted', setGame); window.removeEventListener('online', online); window.removeEventListener('offline', offline); document.removeEventListener('visibilitychange', visibilityChange); socket.disconnect(); };
+    return () => { socket.off('connect', connected).off('disconnect', disconnected).off('room:state', roomState).off('room:closed', closeRoom).off('room:kicked', kicked).off('session:replaced', replaced).off('game:snapshot', gameSnapshot).off('game:state', gameState).off('game:turnStarted', gameTurnStarted); window.removeEventListener('online', online); window.removeEventListener('offline', offline); document.removeEventListener('visibilitychange', visibilityChange); socket.disconnect(); };
   }, [setConnection, setNetworkOnline, updateRoom, clearRoom, setNotice, setGame, clearGame]);
 
   const createRoom = (nickname: string) => {
@@ -166,19 +222,19 @@ export function App() {
   const startGame = () => {
     if (!state.room) return;
     socket.emit('game:start', { roomCode: state.room.code, requestId: requestId() }, (result) => {
-      if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
+      handleGameAck(result, 'ack:game:start');
     });
   };
   const playCards = (cardIndexes: number[]) => {
     if (!state.room) return;
     socket.emit('game:playCards', { roomCode: state.room.code, cardIndexes, requestId: requestId() }, (result) => {
-      if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
+      handleGameAck(result, 'ack:game:playCards');
     });
   };
   const challenge = () => {
     if (!state.room) return;
     socket.emit('game:challenge', { roomCode: state.room.code, requestId: requestId() }, (result) => {
-      if (result.ok) setGame(result.data); else state.setNotice(result.error.message);
+      handleGameAck(result, 'ack:game:challenge');
     });
   };
   const returnToRoom = () => {
@@ -198,7 +254,7 @@ export function App() {
   };
   const useItem = (itemId: NonNullable<typeof state.game>['items'][number]) => {
     if (!state.room) return;
-    socket.emit('game:useItem', { roomCode: state.room.code, itemId, requestId: requestId() }, (result) => { if (result.ok) setGame(result.data); else state.setNotice(result.error.message); });
+    socket.emit('game:useItem', { roomCode: state.room.code, itemId, requestId: requestId() }, (result) => handleGameAck(result, 'ack:game:useItem'));
   };
   const fullscreen = () => {
     if (!document.fullscreenElement) void document.documentElement.requestFullscreen().catch(() => state.setNotice('当前浏览器无法进入全屏'));
@@ -223,7 +279,7 @@ export function App() {
       if (sessionToken) socket.emit('session:resume', { sessionToken }, (result) => {
         if (result.ok) {
           state.enterRoom(result.data.room, result.data.playerId, result.data.sessionToken);
-          if (result.data.game) state.setGame(result.data.game); else state.clearGame();
+          if (result.data.game) state.setGame(result.data.game, 'manual:session:resume'); else state.clearGame();
         } else {
           state.setNotice(result.error.message);
         }

@@ -133,7 +133,7 @@ const RABBIT_EXTENSION_SECONDS = 3;
 const FROG_CHALLENGE_EXTENSION_SECONDS = 4;
 
 const partyEventWeights: Record<(typeof partyEventPool)[number], number> = {
-  BLACKOUT: 12,
+  HIDDEN_BET: 12,
   DRUNKEN: 10,
   RAPID_NIGHT: 8,
   DOUBLE_DANGER: 5,
@@ -146,12 +146,12 @@ const partyEventWeights: Record<(typeof partyEventPool)[number], number> = {
 };
 
 const partyEventMeta: Record<TavernEventType, Omit<PublicTavernEvent, 'roundNumber' | 'turnDurationSeconds'>> = {
-  BLACKOUT: {
-    type: 'BLACKOUT',
-    title: '漆黑之夜',
-    description: '本轮只能看到自己的准确手牌数量。',
+  HIDDEN_BET: {
+    type: 'HIDDEN_BET',
+    title: '暗注夜',
+    description: '本轮玩家出牌时，其他玩家暂时不知道本次出了几张牌；翻牌后公开真实数量。',
     category: 'INFORMATION',
-    intensity: 'MEDIUM',
+    intensity: 'HIGH',
   },
   DRUNKEN: {
     type: 'DRUNKEN',
@@ -576,20 +576,19 @@ export class GameService {
       turnDirection: game.turnDirection,
       players: game.playerOrder.map((playerId, seatIndex) => {
         const handCount = game.hands.get(playerId)?.length ?? 0;
-        const visibleHandCount = this.shouldHideHandCount(game, viewerId, playerId) ? null : handCount;
         return {
           playerId,
           name: game.playerNames.get(playerId) ?? playerId,
           seatIndex,
           connected: game.connectedPlayerIds.has(playerId),
           alive: game.alivePlayerIds.has(playerId),
-          handCount: visibleHandCount,
-          cardCount: visibleHandCount,
+          handCount,
+          cardCount: handCount,
         };
       }),
       hand: [...hand],
       discardCount: game.discardCount,
-      lastPlay: game.lastPlay ? { playerId: game.lastPlay.playerId, count: game.lastPlay.count, claimedRank: game.targetRank } : null,
+      lastPlay: game.lastPlay ? { playerId: game.lastPlay.playerId, count: this.publicLastPlayCount(game, viewerId), claimedRank: game.targetRank } : null,
       challenge,
       punishment: game.punishment ? { ...game.punishment } : null,
       winner: game.winnerId ? { winnerId: game.winnerId } : null,
@@ -1261,10 +1260,12 @@ export class GameService {
     return false;
   }
 
-  private shouldHideHandCount(game: InternalGame, viewerId: string, playerId: string): boolean {
-    return game.gameMode === 'PARTY'
-      && game.tavernEvent?.type === 'BLACKOUT'
-      && viewerId !== playerId;
+  private publicLastPlayCount(game: InternalGame, viewerId: string): number | null {
+    if (!game.lastPlay) return null;
+    if (game.gameMode !== 'PARTY' || game.tavernEvent?.type !== 'HIDDEN_BET') return game.lastPlay.count;
+    if (viewerId === game.lastPlay.playerId) return game.lastPlay.count;
+    if (!['TURN', 'CHALLENGE_WINDOW', 'CHALLENGE_CALLOUT'].includes(game.phase)) return game.lastPlay.count;
+    return null;
   }
 
   private shouldPublishTavernEvent(game: InternalGame): boolean {

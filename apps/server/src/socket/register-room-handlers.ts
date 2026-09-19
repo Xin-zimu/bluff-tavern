@@ -227,8 +227,9 @@ export function registerRoomHandlers(io: GameServer, socket: GameSocket, rooms: 
       const ackResult = { ok: true as const, data: result.state };
       processedGameRequests.set(key, ackResult);
       logger.info({ event: 'cards_played', roomCode: parsed.data.roomCode, playerId: socket.data.playerId, count: result.cue.count });
-      emitCue(io, result.cue);
-      io.to(parsed.data.roomCode).emit('game:cardsPlayed', { playerId: socket.data.playerId!, count: result.cue.count ?? 0, roundNumber: result.state.roundNumber });
+      const publicCount = result.state.tavernEvent?.type === 'HIDDEN_BET' ? null : result.cue.count ?? 0;
+      emitCue(io, publicCount === null ? omitCueCount(result.cue) : result.cue);
+      io.to(parsed.data.roomCode).emit('game:cardsPlayed', { playerId: socket.data.playerId!, count: publicCount, roundNumber: result.state.roundNumber });
       broadcastGameSnapshots(io, rooms, games, parsed.data.roomCode);
       scheduleGame(io, rooms, games, scheduler, parsed.data.roomCode, logger);
       ack(ackResult);
@@ -435,6 +436,12 @@ function scheduleGame(io: GameServer, rooms: RoomStore, games: GameService, sche
 
 function emitCue(io: GameServer, cue: GameCue): void {
   io.to(cue.roomCode).emit('game:cue', cue);
+}
+
+function omitCueCount(cue: GameCue): GameCue {
+  const withoutCount = { ...cue };
+  delete withoutCount.count;
+  return withoutCount;
 }
 
 function gameRequestKey(roomCode: string, playerId: string, requestId: string): string {

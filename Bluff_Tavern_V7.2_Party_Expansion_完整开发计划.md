@@ -252,7 +252,7 @@ PUNISHMENT
 映射：
 
 ```text
-BLACKOUT        INFORMATION
+HIDDEN_BET      INFORMATION
 DRUNKEN         TURN_ORDER
 RAPID_NIGHT     TEMPO
 DOUBLE_DANGER   PUNISHMENT
@@ -271,7 +271,7 @@ LAST_CALL       TEMPO
 V7.1 已有：
 
 ```text
-BLACKOUT
+HIDDEN_BET
 DRUNKEN
 RAPID_NIGHT
 DOUBLE_DANGER
@@ -296,13 +296,14 @@ LAST_CALL
 
 # 9. 现有事件最终规则
 
-## BLACKOUT / 漆黑之夜
+## HIDDEN_BET / 暗注夜
 
-> 本轮只能看到自己的准确手牌数量。
+> 本轮玩家出牌时，其他玩家暂时不知道本次出了几张牌；翻牌后公开真实数量。
 
 ```text
-自己 handCount = 正常
-其他玩家 handCount = null
+出牌本人 lastPlay.count = 真实数量
+其他玩家 Reveal 前 lastPlay.count = null
+所有玩家 handCount / cardCount = 正常公开
 ```
 
 ## DRUNKEN / 醉酒之夜
@@ -669,7 +670,7 @@ Desktop 默认显示当前 + 上一轮；Mobile 默认只显示当前。
 
 | Event | Weight |
 |---|---:|
-| BLACKOUT | 12 |
+| HIDDEN_BET | 12 |
 | DRUNKEN | 10 |
 | RAPID_NIGHT | 8 |
 | DOUBLE_DANGER | 5 |
@@ -811,7 +812,7 @@ Party Intro 动画只能作用自己的 `.party-event-intro*` 选择器。
 
 必须继续覆盖：
 
-- BLACKOUT：隐藏其他玩家手牌数
+- HIDDEN_BET：Reveal 前隐藏其他玩家本次出牌数量但保留手牌数
 - DRUNKEN：方向反转
 - RAPID_NIGHT：Party 固定 5 秒
 - DOUBLE_DANGER：最多两枪

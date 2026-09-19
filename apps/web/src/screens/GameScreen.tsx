@@ -23,6 +23,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const [dismissedTip, setDismissedTip] = useState(() => localStorage.getItem('bluff-tavern.dismissed-tip.v6') === 'true');
   const clockRef = useRef({ sequence: game.sequence, localReceivedAt: Date.now(), serverNow: game.serverNow });
   const playedAudioSequence = useRef<number | null>(null);
+  const selectionScopeRef = useRef({ phase: game.phase, turnPlayerId: game.turnPlayerId, roundNumber: game.roundNumber, handKey: game.hand.join('|') });
   const isTurn = game.turnPlayerId === playerId && game.phase === 'TURN';
   const canPlay = isTurn && !game.mustChallenge;
   const canSubmitPlay = canPlay && selected.length >= game.minimumPlayCount && selected.length <= game.maximumPlayCount;
@@ -73,6 +74,16 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
     playedAudioSequence.current = game.sequence;
     playGamePhaseSound(game, audioMuted);
   }, [game, audioMuted]);
+  useEffect(() => {
+    const nextScope = { phase: game.phase, turnPlayerId: game.turnPlayerId, roundNumber: game.roundNumber, handKey: game.hand.join('|') };
+    const previous = selectionScopeRef.current;
+    const scopeChanged = previous.phase !== nextScope.phase
+      || previous.turnPlayerId !== nextScope.turnPlayerId
+      || previous.roundNumber !== nextScope.roundNumber
+      || previous.handKey !== nextScope.handKey;
+    selectionScopeRef.current = nextScope;
+    if (scopeChanged || game.phase !== 'TURN' || game.turnPlayerId !== playerId) setSelected([]);
+  }, [game.phase, game.turnPlayerId, game.roundNumber, game.hand, playerId]);
   const syncedNow = clockRef.current.serverNow + (localNow - clockRef.current.localReceivedAt);
   const secondsLeft = game.phaseEndsAt ? Math.max(0, Math.ceil((game.phaseEndsAt - syncedNow) / 1_000)) : null;
   const modeRuleCopy = describeModeRule(game, secondsLeft);
@@ -146,7 +157,8 @@ function RoundTargetHud({ target, roundNumber }: { target: TargetRank; roundNumb
 
 function TablePile({ game, lastPlayerName }: { game: GameView; lastPlayerName: string | undefined }) {
   const revealedCards = getTablePileRevealedCards(game);
-  const pileCards = revealedCards.length > 0 ? revealedCards.length : Math.max(game.lastPlay?.count ?? Math.min(game.discardCount, 3), game.discardCount > 0 ? 1 : 0);
+  const hiddenBet = game.lastPlay?.count === null;
+  const pileCards = revealedCards.length > 0 ? revealedCards.length : hiddenBet ? 1 : Math.max(game.lastPlay?.count ?? Math.min(game.discardCount, 3), game.discardCount > 0 ? 1 : 0);
   return <div className="table-pile" aria-label="公共牌区">
     <div className={`table-pile__cards${revealedCards.length > 0 ? ' table-pile__cards--revealed' : ''}`} aria-hidden="true">
       {revealedCards.length > 0
@@ -157,10 +169,16 @@ function TablePile({ game, lastPlayerName }: { game: GameView; lastPlayerName: s
     </div>
     <div className="table-pile__copy">
       <strong>公共牌区</strong>
-      <p>{game.lastPlay ? `${lastPlayerName ?? '玩家'} 声明：${game.lastPlay.count} 张 ${game.lastPlay.claimedRank}` : '本轮尚未有人出牌'}</p>
-      <small>{revealedCards.length > 0 ? '已公开至本轮结束' : game.lastPlay ? '当前可质疑对象' : `目标牌是 ${game.targetCard}`}</small>
+      <p>{describeLastPlay(game, lastPlayerName)}</p>
+      <small>{revealedCards.length > 0 ? '已公开至本轮结束' : game.lastPlay ? hiddenBet ? '数量暂时隐藏' : '当前可质疑对象' : `目标牌是 ${game.targetCard}`}</small>
     </div>
   </div>;
+}
+
+function describeLastPlay(game: GameView, lastPlayerName: string | undefined): string {
+  if (!game.lastPlay) return '本轮尚未有人出牌';
+  if (game.lastPlay.count === null) return `${lastPlayerName ?? '玩家'} 已下注，声明了一手 ${game.lastPlay.claimedRank}`;
+  return `${lastPlayerName ?? '玩家'} 声明：${game.lastPlay.count} 张 ${game.lastPlay.claimedRank}`;
 }
 
 function CardFace({ rank, size = 'normal', className = '', style }: { rank: CardRank; size?: 'normal' | 'small'; className?: string; style?: CSSProperties }) {
@@ -195,7 +213,7 @@ function ChallengeWindowPanel({ game, now, selfCanChallenge, onChallenge }: { ga
   return <aside className="challenge-window-panel" aria-live="polite">
     <strong>质疑窗口</strong>
     <span>{remaining}s</span>
-    <p>{game.lastPlay ? `上一手声明 ${game.lastPlay.claimedRank} × ${game.lastPlay.count}` : '等待质疑'}</p>
+    <p>{game.lastPlay ? game.lastPlay.count === null ? '上一手已下注，数量暂时隐藏' : `上一手声明 ${game.lastPlay.claimedRank} × ${game.lastPlay.count}` : '等待质疑'}</p>
     <button type="button" disabled={!selfCanChallenge} onClick={onChallenge}>{selfCanChallenge ? '质疑！' : '等待其他玩家质疑'}</button>
   </aside>;
 }
@@ -243,8 +261,8 @@ function describePartyEventRule(game: GameView, secondsLeft: number | null): str
       return `快速夜：本轮每人 ${game.turnDurationSeconds} 秒`;
     case 'DOUBLE_DANGER':
       return '双倍危机：受罚者最多连续开两枪';
-    case 'BLACKOUT':
-      return '漆黑之夜：只能看到自己的准确手牌数';
+    case 'HIDDEN_BET':
+      return '暗注夜：他人的出牌数量翻牌前隐藏';
     default:
       return null;
   }
@@ -269,6 +287,7 @@ function describeMatchStatus(game: GameView, currentPlayerName?: string, lastPla
   if (game.phase === 'ROUND_START') return `第 ${game.roundNumber} 轮开始，目标牌 ${game.targetCard}`;
   if (game.phase === 'TURN') {
     if (game.mustChallenge) return `${currentPlayerName ?? '玩家'} 必须质疑上一手`;
+    if (game.lastPlay?.count === null) return `${lastPlayerName ?? '玩家'} 已下注，等待 ${currentPlayerName ?? '玩家'} 行动`;
     if (game.minimumPlayCount === game.maximumPlayCount && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 必须出 ${game.minimumPlayCount} 张或质疑`;
     if (game.gameMode === 'PARTY' && game.tavernEvent?.type === 'FORCED_BET' && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 至少出 ${game.minimumPlayCount} 张或质疑`;
     if (game.gameMode === 'ESCALATION' && game.lastPlay) return `${lastPlayerName ?? '玩家'} 已出 ${game.lastPlay.count} 张，${currentPlayerName ?? '玩家'} 至少出 ${game.minimumPlayCount} 张或质疑`;

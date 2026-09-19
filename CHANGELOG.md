@@ -9,6 +9,7 @@
 - 新增 Party Expansion 事件：单张夜、跟注夜、豪饮之夜、最后点单。
 - 新增服务端权威 `maximumPlayCount`、带权重 Party 事件抽取、最近两轮防重复和公开事件历史。
 - 新增 Party 回合事件开场、当前事件 HUD 文案、Lobby Party 详情和 RulesPanel 当前事件说明。
+- RC 试玩阶段将低价值的漆黑之夜替换为暗注夜，并对客户端 GameSnapshot 写入增加单调防护。
 
 ### Changed
 
