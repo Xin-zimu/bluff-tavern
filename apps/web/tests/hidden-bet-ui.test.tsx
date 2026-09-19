@@ -43,11 +43,11 @@ function hiddenBetView(): GameView {
     maximumPlayCount: 3,
     turnDirection: 'CLOCKWISE',
     players: [
-      { playerId: 'p1', name: 'Alpha', seatIndex: 0, connected: true, alive: true, handCount: 3, cardCount: 3 },
+      { playerId: 'p1', name: 'Alpha', seatIndex: 0, connected: true, alive: true, handCount: null, cardCount: null },
       { playerId: 'p2', name: 'Beta', seatIndex: 1, connected: true, alive: true, handCount: 5, cardCount: 5 },
     ],
     hand: ['A', 'K', 'Q', 'JOKER', 'A'],
-    discardCount: 2,
+    discardCount: null,
     lastPlay: { playerId: 'p1', count: null, claimedRank: 'A' },
     challenge: null,
     punishment: null,
@@ -60,7 +60,7 @@ function hiddenBetView(): GameView {
     tavernEvent: {
       type: 'HIDDEN_BET',
       title: '暗注夜',
-      description: '本轮玩家出牌时，其他玩家暂时不知道本次出了几张牌；翻牌后公开真实数量。',
+      description: '本轮其他玩家的剩余手牌数量与每次出牌数量都会隐藏，只有质疑翻牌时才公开被质疑那一手的真实数量。',
       category: 'INFORMATION',
       roundNumber: 1,
       turnDurationSeconds: null,
@@ -103,9 +103,18 @@ describe('HIDDEN_BET UI projection', () => {
     }));
 
     expect(html).toContain('数量暂时隐藏');
+    expect(html).toContain('已出数量暂时隐藏');
+    expect(html).toContain('手牌数量隐藏');
     expect(html).toContain('Alpha 已下注');
+    expect(html).toContain('上一手已下注，数量暂时隐藏');
+    expect(html).not.toContain('已出 2 张');
+    expect(html).not.toContain('2 张手牌');
+    expect(html).not.toContain('3 张手牌');
     expect(html).not.toContain('2 张 A');
     expect(html).not.toContain('A × 2');
+    expect(html).not.toContain('声明：2 张');
+    expect(html).not.toContain('title="2');
+    expect(html).not.toContain('aria-label="2');
     expect(html.match(/table-pile__card-back/g)).toHaveLength(1);
   });
 });

@@ -237,7 +237,7 @@ export interface GameSnapshot {
 
   players: PublicPlayerState[];
   hand: CardRank[];
-  discardCount: number;
+  discardCount: number | null;
   lastPlay: PublicLastPlay | null;
   challenge: PublicChallengeState | null;
   punishment: PublicPunishmentState | null;

@@ -36,7 +36,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const players = useMemo(() => {
     const seated = room.players.map((player) => {
       const publicState = game.players.find((entry) => entry.playerId === player.id);
-      return { ...player, cards: publicState ? publicState.cardCount : 0, alive: game.alivePlayerIds.includes(player.id) };
+      return { ...player, cards: publicState ? publicState.cardCount : null, alive: game.alivePlayerIds.includes(player.id) };
     });
     const self = seated.find((player) => player.id === playerId);
     return self ? [...seated.filter((player) => player.id !== playerId), self] : seated;
@@ -92,7 +92,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
   const tipsy = activeItemEffect?.type === 'TAVERN_MUG_TIPSY';
   return <main className={`game-screen${eventClass}`}>
     <p className="rotate-hint">为获得最佳牌桌视野，请横屏游玩</p>
-    <header className="game-header"><div><p className="eyebrow">第 {game.roundNumber} 轮 · {modeCopy} · #{game.sequence}</p><h1>{isGameOver ? '本局结算' : '诡牌酒桌'}</h1></div><div className="game-header-actions">{secondsLeft !== null && <span className="phase-clock">{secondsLeft}s</span>}<span className="discard">已出 {game.discardCount} 张</span><button className="fullscreen-button" onClick={() => setRulesOpen(true)}>规则</button><button className="fullscreen-button" onClick={onFullscreen}>全屏</button><button className="fullscreen-button fullscreen-button--danger" onClick={leaveWithConfirm}>退出房间</button></div></header>
+    <header className="game-header"><div><p className="eyebrow">第 {game.roundNumber} 轮 · {modeCopy} · #{game.sequence}</p><h1>{isGameOver ? '本局结算' : '诡牌酒桌'}</h1></div><div className="game-header-actions">{secondsLeft !== null && <span className="phase-clock">{secondsLeft}s</span>}<span className="discard">{game.discardCount === null ? '已出数量暂时隐藏' : `已出 ${game.discardCount} 张`}</span><button className="fullscreen-button" onClick={() => setRulesOpen(true)}>规则</button><button className="fullscreen-button" onClick={onFullscreen}>全屏</button><button className="fullscreen-button fullscreen-button--danger" onClick={leaveWithConfirm}>退出房间</button></div></header>
     <div className="cinematic-controls" aria-label="演出设置">
       <button type="button" aria-pressed={!audioMuted} onClick={onToggleAudio}>{audioMuted ? '音效关' : '音效开'}</button>
       <button type="button" aria-pressed={lowPowerActive} onClick={onToggleLowPower}>{lowPowerActive ? '性能省' : '性能满'}</button>
@@ -110,7 +110,7 @@ export function GameScreen({ room, game, playerId, audioMuted, lowPowerActive, r
       </div>
       <ul className={`game-players game-players--${players.length}`}>{players.map((player) => <li key={player.id} className={`${player.id === game.turnPlayerId ? 'active-turn ' : ''}${player.id === playerId ? 'self-seat ' : ''}${game.punishment?.eliminatedPlayerId === player.id ? 'is-newly-eliminated ' : ''}${!player.alive ? 'is-eliminated' : ''}`}>
         {player.characterId && <div className="character-portrait character-portrait--game" aria-hidden="true"><img src={characterImage(player.characterId, !player.alive ? 'eliminated' : game.phase === 'GAME_OVER' && player.id === game.winnerId ? 'victory' : 'idle')} alt="" /></div>}
-        <span className="seat-copy"><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><small>{player.id === game.turnPlayerId && game.phase === 'TURN' ? '出牌中 · ' : ''}{player.characterId ? CHARACTER_ART[player.characterId].name : '未选角色'} · {player.alive ? `${formatCardCount(player.cards)} 张手牌` : '已淘汰'}</small></span>
+        <span className="seat-copy"><strong>{player.nickname}{player.id === playerId ? '（你）' : ''}{!player.isConnected ? '（离线）' : ''}</strong><small>{player.id === game.turnPlayerId && game.phase === 'TURN' ? '出牌中 · ' : ''}{player.characterId ? CHARACTER_ART[player.characterId].name : '未选角色'} · {player.alive ? formatCardCount(player.cards) : '已淘汰'}</small></span>
       </li>)}</ul>
     </section>
     {!isGameOver && game.phase === 'CHALLENGE_WINDOW' && <ChallengeWindowPanel game={game} now={syncedNow} selfCanChallenge={canFreeChallenge} onChallenge={() => { if (!audioMuted) playUiTone(180); onChallenge(); }} />}
@@ -158,7 +158,8 @@ function RoundTargetHud({ target, roundNumber }: { target: TargetRank; roundNumb
 function TablePile({ game, lastPlayerName }: { game: GameView; lastPlayerName: string | undefined }) {
   const revealedCards = getTablePileRevealedCards(game);
   const hiddenBet = game.lastPlay?.count === null;
-  const pileCards = revealedCards.length > 0 ? revealedCards.length : hiddenBet ? 1 : Math.max(game.lastPlay?.count ?? Math.min(game.discardCount, 3), game.discardCount > 0 ? 1 : 0);
+  const visibleDiscardCount = game.discardCount ?? 0;
+  const pileCards = revealedCards.length > 0 ? revealedCards.length : hiddenBet ? 1 : Math.max(game.lastPlay?.count ?? Math.min(visibleDiscardCount, 3), visibleDiscardCount > 0 ? 1 : 0);
   return <div className="table-pile" aria-label="公共牌区">
     <div className={`table-pile__cards${revealedCards.length > 0 ? ' table-pile__cards--revealed' : ''}`} aria-hidden="true">
       {revealedCards.length > 0
@@ -225,7 +226,7 @@ function canUseItem(item: GameView['items'][number], game: GameView, playerId: s
 }
 
 function formatCardCount(count: number | null): string {
-  return count === null ? '?' : String(count);
+  return count === null ? '手牌数量隐藏' : `${count} 张手牌`;
 }
 
 function describeModeRule(game: GameView, secondsLeft: number | null): string | null {
@@ -262,7 +263,7 @@ function describePartyEventRule(game: GameView, secondsLeft: number | null): str
     case 'DOUBLE_DANGER':
       return '双倍危机：受罚者最多连续开两枪';
     case 'HIDDEN_BET':
-      return '暗注夜：他人的出牌数量翻牌前隐藏';
+      return '暗注夜：他人的手牌数与下注数量暂时隐藏';
     default:
       return null;
   }

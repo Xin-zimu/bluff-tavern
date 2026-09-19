@@ -305,7 +305,7 @@ describe('V6 GameService rules', () => {
     }
   });
 
-  it('hides last play count during Party HIDDEN_BET without hiding hand counts', () => {
+  it('keeps the play owner view truthful during Party HIDDEN_BET', () => {
     const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
     const service = deterministic();
     startTurn(service, room);
@@ -315,14 +315,28 @@ describe('V6 GameService rules', () => {
     service.playCards(room.code, 'p1', [0, 1]);
 
     const p1View = service.getView(room.code, 'p1');
-    const p2View = service.getView(room.code, 'p2');
-    const p3View = service.getView(room.code, 'p3');
 
     expect(p1View.tavernEvent).toMatchObject({ type: 'HIDDEN_BET' });
+    expect(p1View.players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: 3, cardCount: 3 });
     expect(p1View.lastPlay).toMatchObject({ playerId: 'p1', count: 2 });
-    expect(p2View.lastPlay).toMatchObject({ playerId: 'p1', count: null });
-    expect(p3View.lastPlay).toMatchObject({ playerId: 'p1', count: null });
-    expect(p2View.players.map((player) => [player.playerId, player.handCount])).toEqual([['p1', 3], ['p2', 5], ['p3', 5]]);
+    expect(p1View.discardCount).toBe(2);
+  });
+
+  it('hides other players hand counts, last play count, and discard delta before reveal during Party HIDDEN_BET', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'HIDDEN_BET');
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q', 'JOKER', 'A']);
+
+    service.playCards(room.code, 'p1', [0, 1, 2]);
+
+    for (const viewerId of ['p2', 'p3']) {
+      const view = service.getView(room.code, viewerId);
+      expect(view.lastPlay).toMatchObject({ playerId: 'p1', count: null });
+      expect(view.players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: null, cardCount: null });
+      expect(view.discardCount).toBeNull();
+    }
   });
 
   it('keeps last play count public outside HIDDEN_BET and after reveal', () => {
@@ -351,7 +365,44 @@ describe('V6 GameService rules', () => {
     hiddenService.challenge(hiddenRoom.code, 'p2');
     const reveal = advanceTo(hiddenService, hiddenRoom.code, 'REVEAL');
     expect(reveal.lastPlay).toMatchObject({ count: 2 });
+    expect(reveal.players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: 1, cardCount: 1 });
     expect(hiddenService.getView(hiddenRoom.code, 'p2').lastPlay).toMatchObject({ count: 2 });
+    expect(hiddenService.getView(hiddenRoom.code, 'p2').players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: null, cardCount: null });
+    expect(hiddenService.getView(hiddenRoom.code, 'p2').discardCount).toBe(2);
+  });
+
+  it('keeps other players hand counts hidden through round end during Party HIDDEN_BET', () => {
+    const room = makeRoom(2, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'HIDDEN_BET');
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q']);
+
+    service.playCards(room.code, 'p1', [0, 1]);
+    service.challenge(room.code, 'p2');
+    const roundEnd = advanceTo(service, room.code, 'ROUND_END');
+
+    expect(roundEnd.tavernEvent).toMatchObject({ type: 'HIDDEN_BET' });
+    expect(service.getView(room.code, 'p2').players.find((player) => player.playerId === 'p1')).toMatchObject({ handCount: null, cardCount: null });
+  });
+
+  it('restores public hand counts when the next Party round is not HIDDEN_BET', () => {
+    const room = makeRoom(3, 'ABC234', defaultV7, [], 'PARTY');
+    const service = deterministic();
+    startTurn(service, room);
+    service.debugSetTavernEvent(room.code, 'HIDDEN_BET');
+    service.debugSetHand(room.code, 'p1', ['A', 'K', 'Q']);
+
+    service.playCards(room.code, 'p1', [0, 1]);
+    service.challenge(room.code, 'p2');
+    advanceTo(service, room.code, 'ROUND_END');
+    service.advancePhase(room.code);
+    service.debugSetTavernEvent(room.code, 'DRUNKEN');
+
+    const nextRound = service.getView(room.code, 'p2');
+    expect(nextRound.phase).toBe('ROUND_START');
+    expect(nextRound.tavernEvent).toMatchObject({ type: 'DRUNKEN' });
+    expect(nextRound.players.find((player) => player.playerId === 'p3')).toMatchObject({ handCount: 5, cardCount: 5 });
   });
 
   it('reverses turn order during Party DRUNKEN', () => {

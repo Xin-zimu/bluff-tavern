@@ -149,7 +149,7 @@ const partyEventMeta: Record<TavernEventType, Omit<PublicTavernEvent, 'roundNumb
   HIDDEN_BET: {
     type: 'HIDDEN_BET',
     title: '暗注夜',
-    description: '本轮玩家出牌时，其他玩家暂时不知道本次出了几张牌；翻牌后公开真实数量。',
+    description: '本轮其他玩家的剩余手牌数量与每次出牌数量都会隐藏，只有质疑翻牌时才公开被质疑那一手的真实数量。',
     category: 'INFORMATION',
     intensity: 'HIGH',
   },
@@ -576,18 +576,19 @@ export class GameService {
       turnDirection: game.turnDirection,
       players: game.playerOrder.map((playerId, seatIndex) => {
         const handCount = game.hands.get(playerId)?.length ?? 0;
+        const publicHandCount = this.shouldHideHandCount(game, viewerId, playerId) ? null : handCount;
         return {
           playerId,
           name: game.playerNames.get(playerId) ?? playerId,
           seatIndex,
           connected: game.connectedPlayerIds.has(playerId),
           alive: game.alivePlayerIds.has(playerId),
-          handCount,
-          cardCount: handCount,
+          handCount: publicHandCount,
+          cardCount: publicHandCount,
         };
       }),
       hand: [...hand],
-      discardCount: game.discardCount,
+      discardCount: this.publicDiscardCount(game, viewerId),
       lastPlay: game.lastPlay ? { playerId: game.lastPlay.playerId, count: this.publicLastPlayCount(game, viewerId), claimedRank: game.targetRank } : null,
       challenge,
       punishment: game.punishment ? { ...game.punishment } : null,
@@ -1266,6 +1267,20 @@ export class GameService {
     if (viewerId === game.lastPlay.playerId) return game.lastPlay.count;
     if (!['TURN', 'CHALLENGE_WINDOW', 'CHALLENGE_CALLOUT'].includes(game.phase)) return game.lastPlay.count;
     return null;
+  }
+
+  private shouldHideHandCount(game: InternalGame, viewerId: string, playerId: string): boolean {
+    return game.gameMode === 'PARTY'
+      && game.tavernEvent?.type === 'HIDDEN_BET'
+      && viewerId !== playerId;
+  }
+
+  private publicDiscardCount(game: InternalGame, viewerId: string): number | null {
+    if (game.gameMode !== 'PARTY' || game.tavernEvent?.type !== 'HIDDEN_BET') return game.discardCount;
+    if (!game.lastPlay) return game.discardCount;
+    if (viewerId === game.lastPlay.playerId) return game.discardCount;
+    if (['TURN', 'CHALLENGE_WINDOW', 'CHALLENGE_CALLOUT'].includes(game.phase)) return null;
+    return game.discardCount;
   }
 
   private shouldPublishTavernEvent(game: InternalGame): boolean {

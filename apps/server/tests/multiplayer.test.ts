@@ -36,6 +36,25 @@ function waitForGameState(client: ClientSocket<ServerToClientEvents, ClientToSer
   });
 }
 
+function waitForEvent<EventName extends keyof ServerToClientEvents>(
+  client: ClientSocket<ServerToClientEvents, ClientToServerEvents>,
+  event: EventName,
+  timeoutMs = 6_000,
+) {
+  return new Promise<Parameters<ServerToClientEvents[EventName]>[0]>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      client.off(event, onEvent as never);
+      reject(new Error(`Timed out waiting for ${String(event)}`));
+    }, timeoutMs);
+    const onEvent = (payload: Parameters<ServerToClientEvents[EventName]>[0]) => {
+      clearTimeout(timer);
+      client.off(event, onEvent as never);
+      resolve(payload);
+    };
+    client.on(event, onEvent as never);
+  });
+}
+
 const zeroRandom = { nextInt: () => 0 };
 
 function wait(ms: number) {
@@ -240,6 +259,9 @@ describe('real Socket.IO multiplayer', () => {
       const other = players.find(({ membership }) => membership.playerId !== turn.turnPlayerId);
       if (!actor || !other) throw new Error('Missing players');
 
+      const cardsPlayedEvent = waitForEvent(other.client, 'game:cardsPlayed');
+      const cueEvent = waitForEvent(other.client, 'game:cue');
+      const otherHiddenState = waitForGameState(other.client, (state) => state.lastPlay?.playerId === actor.membership.playerId);
       const played = await emitAck<GameView>(actor.client, 'game:playCards', {
         roomCode,
         cardIndexes: [0, 1],
@@ -247,29 +269,39 @@ describe('real Socket.IO multiplayer', () => {
       });
       if (!played.ok) throw new Error(played.error.message);
       expect(played.data.lastPlay).toMatchObject({ playerId: actor.membership.playerId, count: 2 });
+      expect(played.data.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: 3, cardCount: 3 });
+      expect(played.data.discardCount).toBe(2);
+      await expect(cardsPlayedEvent).resolves.toMatchObject({ playerId: actor.membership.playerId, count: null });
+      await expect(cueEvent).resolves.not.toHaveProperty('count');
 
-      const otherHidden = await waitForGameState(other.client, (state) => state.sequence >= played.data.sequence && state.lastPlay?.playerId === actor.membership.playerId);
+      const otherHidden = await otherHiddenState;
       expect(otherHidden.lastPlay).toMatchObject({ count: null });
-      expect(otherHidden.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: 3, cardCount: 3 });
+      expect(otherHidden.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: null, cardCount: null });
+      expect(otherHidden.discardCount).toBeNull();
 
       other.client.disconnect();
       const restoredOther = await connect(url);
       const resumedOther = await emitAck<SessionResumeResult>(restoredOther, 'session:resume', { sessionToken: other.membership.sessionToken });
-      expect(resumedOther).toMatchObject({ ok: true, data: { game: { lastPlay: { count: null } } } });
+      expect(resumedOther).toMatchObject({ ok: true, data: { game: { lastPlay: { count: null }, discardCount: null } } });
+      if (resumedOther.ok) expect(resumedOther.data.game?.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: null, cardCount: null });
 
       const resumedActor = await emitAck<SessionResumeResult>(actor.client, 'session:resume', { sessionToken: actor.membership.sessionToken });
-      expect(resumedActor).toMatchObject({ ok: true, data: { game: { lastPlay: { count: 2 } } } });
+      expect(resumedActor).toMatchObject({ ok: true, data: { game: { lastPlay: { count: 2 }, discardCount: 2 } } });
+      if (resumedActor.ok) expect(resumedActor.data.game?.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: 3, cardCount: 3 });
 
       const challengerId = played.data.turnPlayerId;
       if (!challengerId) throw new Error('Missing challenger');
       const challengerClient = challengerId === other.membership.playerId ? restoredOther : actor.client;
       const challenged = await emitAck<GameView>(challengerClient, 'game:challenge', { roomCode, requestId: randomUUID() });
       expect(challenged.ok).toBe(true);
-      const reveal = await waitForGameState(restoredOther, (state) => state.phase === 'REVEAL' && state.lastPlay?.count === 2, 8_000);
-      expect(reveal.lastPlay).toMatchObject({ count: 2 });
+      await wait(2_100);
 
       const revealedResume = await emitAck<SessionResumeResult>(restoredOther, 'session:resume', { sessionToken: other.membership.sessionToken });
       expect(revealedResume).toMatchObject({ ok: true, data: { game: { phase: 'REVEAL', lastPlay: { count: 2 } } } });
+      if (revealedResume.ok) {
+        expect(revealedResume.data.game?.players.find((player) => player.playerId === actor.membership.playerId)).toMatchObject({ handCount: null, cardCount: null });
+        expect(revealedResume.data.game?.discardCount).toBe(2);
+      }
     } finally {
       await app.close();
     }

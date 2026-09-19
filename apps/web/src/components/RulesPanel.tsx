@@ -58,7 +58,7 @@ function modeRules(game: GameView): Array<[string, string]> {
 function eventRules(game: GameView): Array<[string, string]> {
   switch (game.tavernEvent?.type) {
     case 'HIDDEN_BET':
-      return [['暗注夜', '本轮玩家出牌时，其他玩家暂时不知道本次出了几张牌；只有质疑并翻牌后才公开真实数量。']];
+      return [['暗注夜', '其他玩家的剩余手牌数量不会显示，每次出牌的数量也不会立即公开。质疑并翻牌时，才会公开被质疑那一手实际出了几张牌。']];
     case 'DRUNKEN':
       return [['醉酒之夜', '本轮出牌方向反转，下一玩家、强制质疑和下一轮起手都按反方向计算。']];
     case 'RAPID_NIGHT':
